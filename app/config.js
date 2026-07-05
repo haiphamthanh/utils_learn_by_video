@@ -22,5 +22,8 @@ export const config = {
   transcriptionModel: process.env.TRANSCRIPTION_MODEL || "base.en",
   transcriptionLanguage: process.env.TRANSCRIPTION_LANGUAGE || "en",
   whisperDevice: process.env.WHISPER_DEVICE || "cpu",
-  openaiTranscriptionModel: process.env.OPENAI_TRANSCRIPTION_MODEL || "whisper-1"
+  openaiTranscriptionModel: process.env.OPENAI_TRANSCRIPTION_MODEL || "whisper-1",
+  lessonProvider: process.env.LESSON_PROVIDER || "local-basic",
+  lessonModel: process.env.LESSON_MODEL || "local-basic-v1",
+  openaiLessonModel: process.env.OPENAI_LESSON_MODEL || "gpt-5.4-mini"
 };

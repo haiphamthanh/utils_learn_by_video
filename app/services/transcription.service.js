@@ -15,6 +15,15 @@ function makeId(prefix) {
   return `${prefix}_${crypto.randomUUID()}`;
 }
 
+
+function cleanTranscriptText(value) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+
+  const capitalized = text.charAt(0).toUpperCase() + text.slice(1);
+  return /[.!?]$/.test(capitalized) ? capitalized : `${capitalized}.`;
+}
+
 function transcriptionError(code, message, status = 400) {
   const error = new Error(message);
   error.code = code;
@@ -133,7 +142,7 @@ function persistTranscript({ inboxItemId, mediaAssetId, outputPath, jobId }) {
       INSERT INTO transcripts (
         id, media_asset_id, language, raw_text, provider, model, status,
         raw_json_path, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 'RAW', ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, 'CLEANED', ?, ?, ?)
     `).run(
       transcriptId,
       mediaAssetId,
@@ -148,8 +157,8 @@ function persistTranscript({ inboxItemId, mediaAssetId, outputPath, jobId }) {
 
     const insertSegment = db.prepare(`
       INSERT INTO transcript_segments (
-        id, transcript_id, sequence, start_ms, end_ms, raw_text, confidence
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        id, transcript_id, sequence, start_ms, end_ms, raw_text, cleaned_text, confidence
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     payload.segments.forEach((segment, index) => {
@@ -160,6 +169,7 @@ function persistTranscript({ inboxItemId, mediaAssetId, outputPath, jobId }) {
         segment.startMs,
         segment.endMs,
         segment.text,
+        cleanTranscriptText(segment.text),
         segment.confidence ?? null
       );
     });
@@ -300,7 +310,13 @@ export function startTranscription(inboxItemId) {
     );
   }
 
-  if (!["MEDIA_READY", "TRANSCRIPTION_FAILED", "TRANSCRIPT_READY"].includes(target.status)) {
+  if (![
+    "MEDIA_READY",
+    "TRANSCRIPTION_FAILED",
+    "TRANSCRIPT_READY",
+    "LESSON_READY",
+    "LESSON_FAILED"
+  ].includes(target.status)) {
     throw transcriptionError(
       "TRANSCRIPTION_NOT_ALLOWED",
       `Transcription cannot start from status ${target.status}.`,
@@ -426,7 +442,85 @@ export function getTranscript(inboxItemId) {
     ORDER BY sequence
   `).all(transcript.id);
 
+  const updateCleaned = db.prepare(`
+    UPDATE transcript_segments
+    SET cleaned_text = ?
+    WHERE id = ? AND cleaned_text IS NULL
+  `);
+  let cleanedLegacySegments = false;
+
+  for (const segment of segments) {
+    if (!segment.cleanedText) {
+      segment.cleanedText = cleanTranscriptText(segment.rawText);
+      updateCleaned.run(segment.cleanedText, segment.id);
+      cleanedLegacySegments = true;
+    }
+  }
+
+  if (cleanedLegacySegments && transcript.status === "RAW") {
+    const timestamp = nowIso();
+    db.prepare(`
+      UPDATE transcripts
+      SET status = 'CLEANED', updated_at = ?
+      WHERE id = ?
+    `).run(timestamp, transcript.id);
+    transcript.status = "CLEANED";
+  }
+
   return { ...transcript, segments };
+}
+
+
+export function updateTranscriptSegment(inboxItemId, segmentId, payload = {}) {
+  const db = getDatabase();
+  const reviewedText = String(payload.reviewedText ?? "").replace(/\s+/g, " ").trim();
+
+  if (!reviewedText) {
+    throw transcriptionError(
+      "REVIEWED_TEXT_REQUIRED",
+      "Reviewed text cannot be empty."
+    );
+  }
+
+  const segment = db.prepare(`
+    SELECT ts.id, ts.transcript_id AS transcriptId
+    FROM transcript_segments ts
+    JOIN transcripts t ON t.id = ts.transcript_id
+    JOIN media_assets m ON m.id = t.media_asset_id
+    WHERE ts.id = ? AND m.inbox_item_id = ?
+  `).get(segmentId, inboxItemId);
+
+  if (!segment) {
+    throw transcriptionError(
+      "TRANSCRIPT_SEGMENT_NOT_FOUND",
+      "Transcript segment not found.",
+      404
+    );
+  }
+
+  const timestamp = nowIso();
+  const transaction = db.transaction(() => {
+    db.prepare(`
+      UPDATE transcript_segments
+      SET reviewed_text = ?, review_status = 'REVIEWED'
+      WHERE id = ?
+    `).run(reviewedText, segmentId);
+
+    db.prepare(`
+      UPDATE transcripts
+      SET status = 'REVIEWED', updated_at = ?
+      WHERE id = ?
+    `).run(timestamp, segment.transcriptId);
+
+    db.prepare(`
+      UPDATE inbox_items
+      SET updated_at = ?
+      WHERE id = ?
+    `).run(timestamp, inboxItemId);
+  });
+
+  transaction();
+  return getTranscript(inboxItemId);
 }
 
 export function recoverInterruptedTranscriptionJobs() {

@@ -113,11 +113,20 @@ export function listInboxItems({ status = null } = {}) {
       pj.progress AS processingProgress,
       tj.stage AS transcriptionStage,
       tj.progress AS transcriptionProgress,
+      lj.stage AS lessonStage,
+      lj.progress AS lessonProgress,
       t.id AS transcriptId,
       t.raw_text AS transcriptText,
       t.language AS transcriptLanguage,
       t.provider AS transcriptProvider,
       t.model AS transcriptModel,
+      l.id AS lessonId,
+      l.title AS lessonTitle,
+      l.summary_vi AS lessonSummaryVi,
+      l.topic AS lessonTopic,
+      l.difficulty AS lessonDifficulty,
+      l.provider AS lessonProvider,
+      l.model AS lessonModel,
       (
         SELECT COUNT(*)
         FROM transcript_segments ts
@@ -147,6 +156,20 @@ export function listInboxItems({ status = null } = {}) {
       ORDER BY created_at DESC
       LIMIT 1
     )
+    LEFT JOIN lesson_generation_jobs lj ON lj.id = (
+      SELECT id
+      FROM lesson_generation_jobs
+      WHERE inbox_item_id = i.id
+      ORDER BY started_at DESC
+      LIMIT 1
+    )
+    LEFT JOIN lessons l ON l.id = (
+      SELECT id
+      FROM lessons
+      WHERE inbox_item_id = i.id
+      ORDER BY created_at DESC
+      LIMIT 1
+    )
   `;
 
   const params = [];
@@ -173,7 +196,7 @@ export function attachMedia(inboxItemId, uploadedFile) {
     throw notFound();
   }
 
-  if (["PROCESSING", "TRANSCRIBING"].includes(existing.status)) {
+  if (["PROCESSING", "TRANSCRIBING", "LESSON_GENERATING"].includes(existing.status)) {
     fs.rmSync(uploadedFile.path, { force: true });
     throw badRequest("MEDIA_LOCKED", "Media cannot be replaced while processing.");
   }
@@ -193,6 +216,8 @@ export function attachMedia(inboxItemId, uploadedFile) {
   const createdAt = nowIso();
 
   const transaction = db.transaction(() => {
+    db.prepare("DELETE FROM lesson_generation_jobs WHERE inbox_item_id = ?").run(inboxItemId);
+    db.prepare("DELETE FROM lessons WHERE inbox_item_id = ?").run(inboxItemId);
     db.prepare("DELETE FROM transcription_jobs WHERE inbox_item_id = ?").run(inboxItemId);
 
     if (oldMedia?.id) {

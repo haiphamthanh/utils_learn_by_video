@@ -8,6 +8,7 @@ import { createInboxRouter } from "./routes/inbox.routes.js";
 import { createHealthRouter } from "./routes/health.routes.js";
 import { recoverInterruptedProcessingJobs } from "./services/pipeline.service.js";
 import { recoverInterruptedTranscriptionJobs } from "./services/transcription.service.js";
+import { recoverInterruptedLessonJobs } from "./services/lesson.service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,12 +16,16 @@ const __dirname = path.dirname(__filename);
 initializeDatabase();
 const recoveredMediaJobs = recoverInterruptedProcessingJobs();
 const recoveredTranscriptionJobs = recoverInterruptedTranscriptionJobs();
+const recoveredLessonJobs = recoverInterruptedLessonJobs();
 
 if (recoveredMediaJobs > 0) {
   console.log(`Recovered ${recoveredMediaJobs} interrupted media job(s).`);
 }
 if (recoveredTranscriptionJobs > 0) {
   console.log(`Recovered ${recoveredTranscriptionJobs} interrupted transcription job(s).`);
+}
+if (recoveredLessonJobs > 0) {
+  console.log(`Recovered ${recoveredLessonJobs} interrupted lesson job(s).`);
 }
 
 const app = express();
@@ -52,4 +57,5 @@ app.use((error, _req, res, _next) => {
 app.listen(config.port, () => {
   console.log(`Enjoy Journal running at http://localhost:${config.port}`);
   console.log(`Transcription provider: ${config.transcriptionProvider}`);
+  console.log(`Lesson provider: ${config.lessonProvider}`);
 });

@@ -16,8 +16,14 @@ import {
 import {
   getTranscript,
   getTranscriptionStatus,
-  startTranscription
+  startTranscription,
+  updateTranscriptSegment
 } from "../services/transcription.service.js";
+import {
+  getLesson,
+  getLessonGenerationStatus,
+  startLessonGeneration
+} from "../services/lesson.service.js";
 
 const allowedMediaTypes = new Set([
   "video/mp4",
@@ -118,6 +124,44 @@ export function createInboxRouter() {
   router.get("/:id/transcript", (req, res, next) => {
     try {
       res.json({ data: getTranscript(req.params.id), error: null });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.patch("/:id/transcript/segments/:segmentId", (req, res, next) => {
+    try {
+      res.json({
+        data: updateTranscriptSegment(req.params.id, req.params.segmentId, req.body),
+        error: null
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/:id/lesson/generate", (req, res, next) => {
+    try {
+      res.status(202).json({
+        data: startLessonGeneration(req.params.id),
+        error: null
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/:id/lesson-status", (req, res, next) => {
+    try {
+      res.json({ data: getLessonGenerationStatus(req.params.id), error: null });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/:id/lesson", (req, res, next) => {
+    try {
+      res.json({ data: getLesson(req.params.id), error: null });
     } catch (error) {
       next(error);
     }

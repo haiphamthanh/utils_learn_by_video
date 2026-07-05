@@ -93,6 +93,15 @@
           <button class="filter-chip" data-status-filter="TRANSCRIPTION_FAILED">
             Transcription failed
           </button>
+          <button class="filter-chip" data-status-filter="LESSON_GENERATING">
+            Generating lesson
+          </button>
+          <button class="filter-chip" data-status-filter="LESSON_READY">
+            Lesson ready
+          </button>
+          <button class="filter-chip" data-status-filter="LESSON_FAILED">
+            Lesson failed
+          </button>
           <button class="filter-chip" data-status-filter="FAILED">
             Failed
           </button>
@@ -213,11 +222,19 @@
           <button class="transcribe-action" type="button" hidden>
             Create transcript
           </button>
+          <button class="generate-lesson-action" type="button" hidden>
+            Generate lesson
+          </button>
         </div>
         <details class="transcript-preview" hidden>
-          <summary>Transcript preview</summary>
+          <summary>Review transcript</summary>
           <p class="transcript-provider"></p>
+          <p class="transcript-help">Edit only the lines that need correction. Raw transcript remains preserved.</p>
           <div class="transcript-text"></div>
+        </details>
+        <details class="lesson-preview" hidden>
+          <summary>Lesson preview</summary>
+          <div class="lesson-content"></div>
         </details>
       </article>
     </template>

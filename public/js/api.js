@@ -40,3 +40,19 @@ export function transcribeMedia(inboxId) {
 export function getTranscript(inboxId) {
   return request(`/api/inbox/${inboxId}/transcript`);
 }
+
+export function updateTranscriptSegment(inboxId, segmentId, reviewedText) {
+  return request(`/api/inbox/${inboxId}/transcript/segments/${segmentId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reviewedText })
+  });
+}
+
+export function generateLesson(inboxId) {
+  return request(`/api/inbox/${inboxId}/lesson/generate`, { method: "POST" });
+}
+
+export function getLesson(inboxId) {
+  return request(`/api/inbox/${inboxId}/lesson`);
+}

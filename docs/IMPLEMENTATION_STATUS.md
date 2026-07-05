@@ -2,39 +2,48 @@
 
 ## Current Phase
 
-Phase 4 — Transcription
+Phase 5 — Transcript Review & Lesson Generation
 
 ## Completed
 
 - [x] Repository structure
-- [x] Express server
-- [x] SQLite persistence
+- [x] Express server and SQLite persistence
 - [x] Inbox capture and media upload
 - [x] FFmpeg validation and normalization
-- [x] Audio extraction and poster generation
-- [x] Media processing jobs with retry/recovery
-- [x] Transcription provider interface
-- [x] Local Whisper provider
-- [x] OpenAI transcription provider
+- [x] Local Whisper transcription
+- [x] Optional OpenAI transcription provider
 - [x] Timed transcript persistence
-- [x] Transcript segment persistence
-- [x] Transcription job progress and recovery
-- [x] Transcript preview in Inbox
-- [x] Automatic Python virtual environment setup
-- [x] Deterministic transcription smoke test
+- [x] Automatic basic transcript cleaning
+- [x] Per-segment reviewed transcript editing
+- [x] Raw/cleaned/reviewed layer preservation
+- [x] `lessons` database table
+- [x] `lesson_generation_jobs` database table
+- [x] Lesson provider interface
+- [x] Offline `local-basic` provider
+- [x] OpenAI structured lesson provider
+- [x] Deterministic mock lesson provider
+- [x] Canonical `lesson.json` contract
+- [x] Lesson generation progress and recovery
+- [x] Lesson preview in Inbox
+- [x] Versioned lesson artifacts
+- [x] v0.3.0 → v0.4.0 migration compatibility test
+- [x] Media, transcription and lesson smoke tests
 
 ## In Progress
 
-- [ ] End-to-end local Whisper verification on the user's Mac
+- [ ] End-to-end verification with a real user video and local Whisper on the user's Mac
+- [ ] End-to-end verification of OpenAI lesson generation when `OPENAI_API_KEY` is configured
 
 ## Not Started
 
-- [ ] Transcript editing UI
-- [ ] Transcript cleaning
-- [ ] Vietnamese meaning
-- [ ] Key phrase extraction
-- [ ] Lesson generation
-- [ ] Synchronized learning player
+- [ ] Synchronized video + transcript player
+- [ ] Click sentence to seek
+- [ ] Sentence loop
+- [ ] Playback speed controls
+- [ ] Meaning tab
+- [ ] Phrase tab
+- [ ] Journal editing and search
+- [ ] Library view
 - [ ] Chrome Extension
 
 ## Current Flow
@@ -50,34 +59,64 @@ MEDIA_READY
   ↓
 Create transcript
   ↓
-TRANSCRIBING
-  ↓
 TRANSCRIPT_READY
   ↓
-Timed transcript preview
+Review incorrect segments
+  ↓
+Generate lesson
+  ↓
+LESSON_GENERATING
+  ↓
+LESSON_READY
+  ↓
+Preview phrases and patterns
 ```
+
+## Data Preservation Rules
+
+| Layer | Can change? | Rule |
+|---|---:|---|
+| Original media | No | User-provided source is preserved |
+| Raw transcript | No | Never overwritten by cleaning or review |
+| Cleaned transcript | Yes, generated | Basic formatting layer |
+| Reviewed transcript | Yes, user action | Only explicit corrections |
+| Lesson artifact | Versioned | Regeneration creates another JSON file |
+
+## Provider Modes
+
+| Provider | Network | API key | Purpose |
+|---|---:|---:|---|
+| `local-basic` | No | No | Offline lesson contract and basic practice material |
+| `openai` | Yes | Yes | Vietnamese meaning and deeper language analysis |
+| `mock` | No | No | Deterministic automated tests |
 
 ## Known Constraints
 
 | Constraint | Impact | Handling |
 |---|---|---|
-| First local transcription downloads model weights | First run is slower | Model is cached for later runs |
-| Local Whisper officially targets Python 3.8-3.11 | Newer Python may fail | Setup script provisions Python 3.11 on macOS |
-| OpenAI timestamp mode uses `whisper-1` | Newer transcription models have different output capabilities | OpenAI provider intentionally defaults to `whisper-1` |
-| Progress during model inference is approximate | UI may remain on one stage for a while | Stages are informational, not exact time estimates |
+| Local-basic does not perform semantic translation | Vietnamese meaning may be empty | Switch to `LESSON_PROVIDER=openai` |
+| AI lesson quality depends on transcript quality | Incorrect transcript can produce poor lesson | Review only incorrect segments first |
+| OpenAI provider requires API key and network | Generation can fail offline | Local-basic remains the default fallback |
+| Progress during model/API work is approximate | One stage may remain visible for a while | Progress is informational only |
 
-## Next Acceptance Criteria
-
-Phase 4 is done when:
+## Phase 5 Acceptance Criteria
 
 ```text
-MEDIA_READY
+TRANSCRIPT_READY
     ↓
-Click Create transcript
+Open Review transcript
     ↓
-Timed segments are saved
+Correct one segment
     ↓
-Refresh app
+Refresh and correction remains
     ↓
-Transcript remains available
+Generate lesson
+    ↓
+lesson.json is saved
+    ↓
+Refresh and lesson preview remains
+    ↓
+Regenerate lesson
+    ↓
+Previous artifact is still preserved
 ```

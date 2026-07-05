@@ -66,7 +66,7 @@ done
 node scripts/check-runtime.js
 
 echo
-echo "Preparing Python transcription environment..."
+echo "Preparing Python AI environment..."
 bash ./scripts/setup-python.sh
 
 mkdir -p data/inbox/uploads data/lessons data/temp node_modules

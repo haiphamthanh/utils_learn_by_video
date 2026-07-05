@@ -116,7 +116,7 @@ if [ -f "$STAMP_FILE" ]; then
 fi
 
 if [ "$CURRENT" != "$FINGERPRINT" ]; then
-  echo "Installing Python transcription dependencies..."
+  echo "Installing Python AI dependencies..."
   .venv/bin/python -m pip install --upgrade pip setuptools wheel
 
   if ! .venv/bin/python -m pip install -r requirements.txt; then
@@ -137,6 +137,7 @@ fi
 .venv/bin/python - <<'PY'
 import whisper
 from openai import OpenAI
+from pydantic import BaseModel
 
-print("Python transcription environment ready.")
+print("Python AI environment ready.")
 PY

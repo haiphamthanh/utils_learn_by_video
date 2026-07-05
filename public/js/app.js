@@ -1,9 +1,12 @@
 import {
   createInbox,
+  generateLesson,
+  getLesson,
   getTranscript,
   listInbox,
   processMedia,
   transcribeMedia,
+  updateTranscriptSegment,
   uploadMedia
 } from "./api.js";
 
@@ -51,6 +54,9 @@ function statusName(status) {
     TRANSCRIBING: "Transcribing",
     TRANSCRIPT_READY: "Transcript ready",
     TRANSCRIPTION_FAILED: "Transcription failed",
+    LESSON_GENERATING: "Generating lesson",
+    LESSON_READY: "Lesson ready",
+    LESSON_FAILED: "Lesson failed",
     FAILED: "Media failed",
     NEEDS_REVIEW: "Needs review"
   }[status] || status;
@@ -62,12 +68,21 @@ function stageName(stage) {
     VALIDATE: "Validating media",
     PREPARE_MEDIA: "Preparing audio and video",
     SAVE_ARTIFACTS: "Saving media artifacts",
-    STARTING: "Starting transcription worker",
+    STARTING: "Starting worker",
     LOAD_MODEL: "Loading Whisper model",
     UPLOAD_AUDIO: "Uploading audio",
     TRANSCRIBE: "Listening and transcribing",
     VALIDATE_TRANSCRIPT: "Checking timed transcript",
     SAVE_TRANSCRIPT: "Saving transcript",
+    LOAD_LESSON_PROVIDER: "Loading lesson provider",
+    ANALYZE_TRANSCRIPT: "Analyzing transcript",
+    BUILD_SHADOWING: "Building shadowing chunks",
+    BUILD_LESSON: "Building lesson",
+    PREPARE_PROMPT: "Preparing lesson prompt",
+    GENERATE_WITH_AI: "Generating lesson with AI",
+    GENERATE_MOCK: "Generating test lesson",
+    VALIDATE_LESSON: "Checking lesson contract",
+    SAVE_LESSON: "Saving lesson",
     COMPLETE: "Complete",
     FAILED: "Failed"
   }[stage] || stage || "Working";
@@ -75,7 +90,6 @@ function stageName(stage) {
 
 function displayTitle(item) {
   if (item.sourceTitle) return item.sourceTitle;
-
   try {
     return new URL(item.sourceUrl).hostname.replace(/^www\./, "");
   } catch {
@@ -85,7 +99,7 @@ function displayTitle(item) {
 
 function ensurePolling(items) {
   const hasActiveJob = items.some((item) =>
-    ["PROCESSING", "TRANSCRIBING"].includes(item.status)
+    ["PROCESSING", "TRANSCRIBING", "LESSON_GENERATING"].includes(item.status)
   );
 
   if (hasActiveJob && !activePollTimer) {
@@ -101,23 +115,26 @@ function ensurePolling(items) {
 }
 
 function setProgress(item, detail, label, progressBar) {
-  if (!["PROCESSING", "TRANSCRIBING"].includes(item.status)) return;
+  if (!["PROCESSING", "TRANSCRIBING", "LESSON_GENERATING"].includes(item.status)) {
+    return;
+  }
 
   detail.hidden = false;
-  const isTranscription = item.status === "TRANSCRIBING";
-  const progress = Math.max(
-    0,
-    Math.min(
-      100,
-      isTranscription
-        ? item.transcriptionProgress || 0
-        : item.processingProgress || 0
-    )
-  );
-  const stage = isTranscription
-    ? item.transcriptionStage
-    : item.processingStage;
+  let progress = 0;
+  let stage = "QUEUED";
 
+  if (item.status === "PROCESSING") {
+    progress = item.processingProgress || 0;
+    stage = item.processingStage;
+  } else if (item.status === "TRANSCRIBING") {
+    progress = item.transcriptionProgress || 0;
+    stage = item.transcriptionStage;
+  } else {
+    progress = item.lessonProgress || 0;
+    stage = item.lessonStage;
+  }
+
+  progress = Math.max(0, Math.min(100, progress));
   progressBar.style.width = `${progress}%`;
   label.textContent = `${stageName(stage)} · ${progress}%`;
 }
@@ -131,26 +148,103 @@ function formatTime(milliseconds) {
 
 function escapeHtml(value) {
   const div = document.createElement("div");
-  div.textContent = value;
+  div.textContent = value ?? "";
   return div.innerHTML;
 }
 
-async function loadTranscriptPreview(item, details, providerLabel, transcriptText) {
+async function loadTranscriptEditor(item, details, providerLabel, transcriptText) {
   try {
     const transcript = await getTranscript(item.id);
     details.hidden = false;
     providerLabel.textContent =
-      `${transcript.provider} · ${transcript.model} · ${transcript.segments.length} segments`;
+      `${transcript.provider} · ${transcript.model} · ${transcript.segments.length} segments · ${transcript.status}`;
 
     transcriptText.innerHTML = transcript.segments
-      .slice(0, 6)
-      .map((segment) => `
-        <p>
-          <span>${formatTime(segment.startMs)}</span>
-          ${escapeHtml(segment.reviewedText || segment.cleanedText || segment.rawText)}
-        </p>
-      `)
+      .map((segment) => {
+        const effective = segment.reviewedText || segment.cleanedText || segment.rawText;
+        return `
+          <div class="transcript-segment" data-segment-id="${segment.id}">
+            <span class="segment-time">${formatTime(segment.startMs)}</span>
+            <div class="segment-editor">
+              <textarea rows="2">${escapeHtml(effective)}</textarea>
+              <div class="segment-actions">
+                <span class="segment-origin">${segment.reviewStatus === "REVIEWED" ? "Reviewed" : "Cleaned from raw"}</span>
+                <button class="segment-save" type="button">Save correction</button>
+              </div>
+            </div>
+          </div>
+        `;
+      })
       .join("");
+
+    for (const row of transcriptText.querySelectorAll(".transcript-segment")) {
+      const textarea = row.querySelector("textarea");
+      const saveButton = row.querySelector(".segment-save");
+      const origin = row.querySelector(".segment-origin");
+
+      saveButton.addEventListener("click", async () => {
+        saveButton.disabled = true;
+        saveButton.textContent = "Saving…";
+        try {
+          await updateTranscriptSegment(item.id, row.dataset.segmentId, textarea.value);
+          saveButton.textContent = "Saved";
+          origin.textContent = "Reviewed";
+          window.setTimeout(() => {
+            saveButton.textContent = "Save correction";
+            saveButton.disabled = false;
+          }, 900);
+        } catch (error) {
+          window.alert(error.message);
+          saveButton.textContent = "Save correction";
+          saveButton.disabled = false;
+        }
+      });
+    }
+  } catch {
+    details.hidden = true;
+  }
+}
+
+async function loadLessonPreview(item, details, content) {
+  try {
+    const lesson = await getLesson(item.id);
+    const meta = lesson.lesson || {};
+    const learning = lesson.learning || {};
+
+    details.hidden = false;
+    content.innerHTML = `
+      <div class="lesson-heading">
+        <p class="lesson-meta">${escapeHtml(meta.provider)} · ${escapeHtml(meta.model)} · ${escapeHtml(meta.difficulty)}</p>
+        <h3>${escapeHtml(meta.title)}</h3>
+        <p>${escapeHtml(learning.summaryVi || "")}</p>
+      </div>
+      <div class="lesson-preview-grid">
+        <section>
+          <h4>Useful phrases</h4>
+          ${learning.keyPhrases?.length
+            ? learning.keyPhrases.map((item) => `
+                <article class="learning-item">
+                  <strong>${escapeHtml(item.phrase)}</strong>
+                  <p>${escapeHtml(item.meaningVi)}</p>
+                  <small>${escapeHtml(item.whyUseful)}</small>
+                </article>
+              `).join("")
+            : "<p class=\"muted-copy\">No phrases generated in this provider mode.</p>"}
+        </section>
+        <section>
+          <h4>Patterns</h4>
+          ${learning.patterns?.length
+            ? learning.patterns.map((item) => `
+                <article class="learning-item">
+                  <strong>${escapeHtml(item.pattern)}</strong>
+                  <p>${escapeHtml(item.explanationVi)}</p>
+                  <small>${escapeHtml(item.example)}</small>
+                </article>
+              `).join("")
+            : "<p class=\"muted-copy\">No patterns generated yet.</p>"}
+        </section>
+      </div>
+    `;
   } catch {
     details.hidden = true;
   }
@@ -197,6 +291,7 @@ async function refreshInbox({ quiet = false } = {}) {
       const mediaFilename = fragment.querySelector(".media-filename");
       const processAction = fragment.querySelector(".process-action");
       const transcribeAction = fragment.querySelector(".transcribe-action");
+      const generateLessonAction = fragment.querySelector(".generate-lesson-action");
       const processingDetail = fragment.querySelector(".processing-detail");
       const processingLabel = fragment.querySelector(".processing-label");
       const progressBar = fragment.querySelector(".progress-bar");
@@ -204,6 +299,8 @@ async function refreshInbox({ quiet = false } = {}) {
       const transcriptPreview = fragment.querySelector(".transcript-preview");
       const transcriptProvider = fragment.querySelector(".transcript-provider");
       const transcriptText = fragment.querySelector(".transcript-text");
+      const lessonPreview = fragment.querySelector(".lesson-preview");
+      const lessonContent = fragment.querySelector(".lesson-content");
 
       card.dataset.id = item.id;
       card.dataset.status = item.status;
@@ -219,31 +316,45 @@ async function refreshInbox({ quiet = false } = {}) {
         mediaFilename.textContent = item.mediaFilename;
       }
 
-      const active = ["PROCESSING", "TRANSCRIBING"].includes(item.status);
+      const active = ["PROCESSING", "TRANSCRIBING", "LESSON_GENERATING"].includes(item.status);
       if (active) {
         uploadAction.hidden = true;
         processAction.hidden = true;
         transcribeAction.hidden = true;
+        generateLessonAction.hidden = true;
       }
 
       setProgress(item, processingDetail, processingLabel, progressBar);
 
       if (["READY_TO_PROCESS", "FAILED"].includes(item.status)) {
         processAction.hidden = false;
-        processAction.textContent =
-          item.status === "FAILED"
-            ? "Retry media processing"
-            : "Process media";
+        processAction.textContent = item.status === "FAILED"
+          ? "Retry media processing"
+          : "Process media";
       }
 
-      if (["MEDIA_READY", "TRANSCRIPTION_FAILED", "TRANSCRIPT_READY"].includes(item.status)) {
+      if ([
+        "MEDIA_READY",
+        "TRANSCRIPTION_FAILED",
+        "TRANSCRIPT_READY",
+        "LESSON_READY",
+        "LESSON_FAILED"
+      ].includes(item.status)) {
         transcribeAction.hidden = false;
-        transcribeAction.textContent =
-          item.status === "TRANSCRIPT_READY"
-            ? "Transcribe again"
-            : item.status === "TRANSCRIPTION_FAILED"
-              ? "Retry transcription"
-              : "Create transcript";
+        transcribeAction.textContent = ["TRANSCRIPT_READY", "LESSON_READY", "LESSON_FAILED"].includes(item.status)
+          ? "Transcribe again"
+          : item.status === "TRANSCRIPTION_FAILED"
+            ? "Retry transcription"
+            : "Create transcript";
+      }
+
+      if (["TRANSCRIPT_READY", "LESSON_READY", "LESSON_FAILED"].includes(item.status)) {
+        generateLessonAction.hidden = false;
+        generateLessonAction.textContent = item.status === "LESSON_READY"
+          ? "Regenerate lesson"
+          : item.status === "LESSON_FAILED"
+            ? "Retry lesson generation"
+            : "Generate lesson";
       }
 
       if (item.errorMessage) {
@@ -251,13 +362,17 @@ async function refreshInbox({ quiet = false } = {}) {
         itemError.textContent = item.errorMessage;
       }
 
-      if (item.status === "TRANSCRIPT_READY") {
-        void loadTranscriptPreview(
+      if (item.transcriptId && item.status !== "TRANSCRIBING") {
+        void loadTranscriptEditor(
           item,
           transcriptPreview,
           transcriptProvider,
           transcriptText
         );
+      }
+
+      if (item.lessonId && item.status === "LESSON_READY") {
+        void loadLessonPreview(item, lessonPreview, lessonContent);
       }
 
       mediaInput.disabled = active;
@@ -281,7 +396,6 @@ async function refreshInbox({ quiet = false } = {}) {
       processAction.addEventListener("click", async () => {
         processAction.disabled = true;
         processAction.textContent = "Starting…";
-
         try {
           await processMedia(item.id);
           await refreshInbox();
@@ -294,9 +408,20 @@ async function refreshInbox({ quiet = false } = {}) {
       transcribeAction.addEventListener("click", async () => {
         transcribeAction.disabled = true;
         transcribeAction.textContent = "Starting…";
-
         try {
           await transcribeMedia(item.id);
+          await refreshInbox();
+        } catch (error) {
+          window.alert(error.message);
+          await refreshInbox();
+        }
+      });
+
+      generateLessonAction.addEventListener("click", async () => {
+        generateLessonAction.disabled = true;
+        generateLessonAction.textContent = "Starting…";
+        try {
+          await generateLesson(item.id);
           await refreshInbox();
         } catch (error) {
           window.alert(error.message);
