@@ -6,7 +6,7 @@ A local-first application for saving meaningful short-video sources, attaching u
 
 ## Current Version
 
-**v0.2.0 — Phase 3: Media Processing**
+**v0.2.2 — Phase 3: Media Processing + Automatic Environment Repair**
 
 | Capability | Status |
 |---|---|
@@ -22,6 +22,8 @@ A local-first application for saving meaningful short-video sources, attaching u
 | Processing jobs + progress | Done |
 | Retry / reprocess | Done |
 | Yarn startup workflow | Done |
+| Automatic system dependency install | Done |
+| Native SQLite binding repair | Done |
 | Transcription | Next |
 | Lesson generation | Later |
 | Learning player | Later |
@@ -89,16 +91,23 @@ Python AI Worker
 
 ## Requirements
 
-- Node.js 20+
-- Yarn, or Corepack bundled with Node.js
+- Node.js 22, 24 or 26 (Node.js 24 LTS recommended)
+- Yarn 1.22.22, `yarnpkg`, or Corepack
 - Python 3.11+
-- FFmpeg
-- FFprobe
+- FFmpeg and FFprobe
+
+The normal startup flow installs missing system tools automatically when a supported package manager is available.
 
 Check the machine:
 
 ```bash
 ./scripts/doctor.sh
+```
+
+Attempt automatic repair:
+
+```bash
+./scripts/doctor.sh --fix
 ```
 
 Expected:
@@ -125,12 +134,17 @@ The startup script:
 ```text
 load .env when present
         ↓
-check Node / Python / FFmpeg / FFprobe
+auto-install missing system dependencies
         ↓
-use yarn directly
-or Corepack-managed Yarn
+check Node runtime and ABI
         ↓
-yarn install when node_modules is missing
+use yarn / yarnpkg / Corepack-managed Yarn
+        ↓
+reinstall dependencies when Node ABI or package files changed
+        ↓
+verify better-sqlite3 native binding
+        ↓
+auto-repair native binding when needed
         ↓
 yarn migrate
         ↓
@@ -170,6 +184,74 @@ packageManager: yarn@1.22.22
 When `yarn` is not available as a global command, `start.sh` and the user can use Corepack.
 
 No npm command is required by the project workflow.
+
+
+## Automatic System Setup
+
+`./start.sh` now calls:
+
+```bash
+./scripts/install-system-deps.sh --yes
+```
+
+Supported automatic installers:
+
+| Platform | Package manager | Packages installed when missing |
+|---|---|---|
+| macOS | Homebrew | Node.js, Python, FFmpeg, Yarn |
+| Debian / Ubuntu | apt | Node.js, Python, FFmpeg, Yarn package |
+| Fedora | dnf | Node.js, Python, FFmpeg |
+| Arch Linux | pacman | Node.js, Python, FFmpeg, Yarn |
+
+On macOS, if Homebrew is missing, the script can install it. If Apple Command Line Tools are missing, macOS opens the official installer and the user reruns `./start.sh` after that installation finishes.
+
+Run setup directly:
+
+```bash
+yarn setup:system
+```
+
+Check without changing the machine:
+
+```bash
+./scripts/install-system-deps.sh --check
+```
+
+## Node.js and SQLite Native Binding
+
+The project pins:
+
+```text
+better-sqlite3 12.11.1
+```
+
+The startup script fingerprints:
+
+```text
+platform + architecture + Node ABI + package.json + yarn.lock
+```
+
+When the fingerprint changes, dependencies are reinstalled for the current runtime. This prevents stale native binaries from surviving a Node.js upgrade.
+
+Manual repair remains available:
+
+```bash
+yarn repair:native
+```
+
+That command:
+
+```text
+ensure build tools
+    ↓
+remove stale better-sqlite3 binding
+    ↓
+yarn install --force
+    ↓
+open an in-memory SQLite database
+    ↓
+verify SELECT 1
+```
 
 ## Media Processing
 
@@ -309,6 +391,9 @@ Example:
 | `yarn start` | Start normally |
 | `yarn migrate` | Create/update idempotent schema |
 | `yarn doctor` | Check machine requirements |
+| `./scripts/doctor.sh --fix` | Install missing system dependencies |
+| `yarn setup:system` | Run automatic system setup |
+| `yarn repair:native` | Rebuild the SQLite native binding |
 | `yarn check` | JavaScript syntax checks |
 | `yarn smoke:media` | Verify FFmpeg commands and generated artifacts |
 

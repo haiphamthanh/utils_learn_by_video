@@ -1,20 +1,26 @@
 {
   "name": "enjoy-journal",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "private": true,
   "description": "Local-first personal English listening and language journal.",
   "type": "module",
   "packageManager": "yarn@1.22.22",
+  "engines": {
+    "node": ">=22 <27"
+  },
   "scripts": {
     "dev": "node --watch app/server.js",
     "start": "node app/server.js",
     "migrate": "node app/db/migrate.js",
     "doctor": "bash scripts/doctor.sh",
-    "check": "node --check app/server.js && node --check app/routes/inbox.routes.js && node --check app/services/inbox.service.js && node --check app/services/media.service.js && node --check app/services/pipeline.service.js && node --check public/js/app.js",
-    "smoke:media": "bash scripts/smoke-media.sh"
+    "runtime:check": "node scripts/check-runtime.js",
+    "repair:native": "bash scripts/repair-native-deps.sh",
+    "check": "node --check app/server.js && node --check app/routes/inbox.routes.js && node --check app/services/inbox.service.js && node --check app/services/media.service.js && node --check app/services/pipeline.service.js && node --check public/js/app.js && node --check scripts/check-runtime.js",
+    "smoke:media": "bash scripts/smoke-media.sh",
+    "setup:system": "bash scripts/install-system-deps.sh --yes"
   },
   "dependencies": {
-    "better-sqlite3": "^11.8.1",
+    "better-sqlite3": "12.11.1",
     "express": "^5.1.0",
     "multer": "^1.4.5-lts.2"
   }

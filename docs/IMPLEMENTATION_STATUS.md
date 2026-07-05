@@ -4,6 +4,8 @@
 
 **Phase 3 — Media Processing: Complete**
 
+**Environment hardening v0.2.2: Complete**
+
 ## Completed
 
 ### Foundation
@@ -48,6 +50,18 @@
 - [x] Update doctor script
 - [x] Update documentation commands
 
+### Environment Hardening
+
+- [x] Upgrade `better-sqlite3` for Node.js 26 prebuilt support
+- [x] Detect Node ABI changes
+- [x] Fingerprint package files and runtime
+- [x] Reinstall native modules when fingerprint changes
+- [x] Verify SQLite binding before migration
+- [x] Automatically repair stale native bindings
+- [x] Automatically install FFmpeg / FFprobe when missing
+- [x] Automatically install system dependencies on supported package managers
+- [x] Add `doctor --fix` workflow
+
 ## Verified
 
 The following checks pass in the build environment:
@@ -61,6 +75,8 @@ The following checks pass in the build environment:
 ✓ FFmpeg present
 ✓ FFprobe present
 ✓ Yarn available through Corepack
+✓ Automatic dependency installer check mode
+✓ Runtime compatibility check
 ✓ audio.wav generated
 ✓ normalized.mp4 generated
 ✓ poster.jpg generated
@@ -94,6 +110,9 @@ Full HTTP runtime after yarn install: verify on development machine
 | Decision | Reason |
 |---|---|
 | Yarn-only documented workflow | Match project preference and keep one package-manager path |
+| Runtime fingerprint | Prevent stale native bindings after Node upgrades |
+| Automatic system setup | Reduce first-run failures on a new machine |
+| `better-sqlite3` 12.11.1 | Support current Node runtimes including Node.js 26 |
 | Corepack fallback | Avoid requiring global Yarn when Node already provides package-manager mediation |
 | `MEDIA_READY` status | Keep media completion distinct from future lesson completion |
 | FFmpeg in Node service | Phase 3 is deterministic media work and does not need the Python AI worker yet |
