@@ -7,6 +7,7 @@ import { initializeDatabase } from "./db/database.js";
 import { createInboxRouter } from "./routes/inbox.routes.js";
 import { createLessonsRouter } from "./routes/lessons.routes.js";
 import { createHealthRouter } from "./routes/health.routes.js";
+import { recoverInterruptedAcquisitionJobs } from "./services/automation.service.js";
 import { recoverInterruptedProcessingJobs } from "./services/pipeline.service.js";
 import { recoverInterruptedTranscriptionJobs } from "./services/transcription.service.js";
 import { recoverInterruptedLessonJobs } from "./services/lesson.service.js";
@@ -15,10 +16,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 initializeDatabase();
+const recoveredAcquisitionJobs = recoverInterruptedAcquisitionJobs();
 const recoveredMediaJobs = recoverInterruptedProcessingJobs();
 const recoveredTranscriptionJobs = recoverInterruptedTranscriptionJobs();
 const recoveredLessonJobs = recoverInterruptedLessonJobs();
 
+if (recoveredAcquisitionJobs > 0) {
+  console.log(`Recovered ${recoveredAcquisitionJobs} interrupted source acquisition job(s).`);
+}
 if (recoveredMediaJobs > 0) {
   console.log(`Recovered ${recoveredMediaJobs} interrupted media job(s).`);
 }
@@ -58,6 +63,7 @@ app.use((error, _req, res, _next) => {
 
 app.listen(config.port, () => {
   console.log(`Enjoy Journal running at http://localhost:${config.port}`);
+  console.log(`Automatic URL analysis: ${config.autoProcessUrls ? "enabled" : "disabled"}`);
   console.log(`Transcription provider: ${config.transcriptionProvider}`);
   console.log(`Lesson provider: ${config.lessonProvider}`);
 });

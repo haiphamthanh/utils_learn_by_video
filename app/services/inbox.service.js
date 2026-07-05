@@ -109,6 +109,8 @@ export function listInboxItems({ status = null } = {}) {
       CASE WHEN m.normalized_video_path IS NOT NULL THEN 1 ELSE 0 END AS hasNormalizedVideo,
       CASE WHEN m.normalized_audio_path IS NOT NULL THEN 1 ELSE 0 END AS hasNormalizedAudio,
       CASE WHEN m.poster_path IS NOT NULL THEN 1 ELSE 0 END AS hasPoster,
+      aj.stage AS acquisitionStage,
+      aj.progress AS acquisitionProgress,
       pj.stage AS processingStage,
       pj.progress AS processingProgress,
       tj.stage AS transcriptionStage,
@@ -135,6 +137,13 @@ export function listInboxItems({ status = null } = {}) {
     FROM inbox_items i
     LEFT JOIN sources s ON s.id = i.source_id
     LEFT JOIN media_assets m ON m.inbox_item_id = i.id
+    LEFT JOIN source_acquisition_jobs aj ON aj.id = (
+      SELECT id
+      FROM source_acquisition_jobs
+      WHERE inbox_item_id = i.id
+      ORDER BY started_at DESC
+      LIMIT 1
+    )
     LEFT JOIN processing_jobs pj ON pj.id = (
       SELECT id
       FROM processing_jobs

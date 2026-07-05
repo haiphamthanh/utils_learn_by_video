@@ -29,6 +29,10 @@ export function uploadMedia(inboxId, file) {
   return request(`/api/inbox/${inboxId}/media`, { method: "POST", body });
 }
 
+export function startAutomaticAnalysis(inboxId) {
+  return request(`/api/inbox/${inboxId}/auto-process`, { method: "POST" });
+}
+
 export function processMedia(inboxId) {
   return request(`/api/inbox/${inboxId}/process`, { method: "POST" });
 }

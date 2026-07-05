@@ -61,7 +61,8 @@ async function handleMessage(message = {}) {
             platform: capture.platform,
             capturedAt: new Date().toISOString()
           },
-          personalNote: capture.personalNote
+          personalNote: capture.personalNote,
+          autoProcess: true
         })
       });
 

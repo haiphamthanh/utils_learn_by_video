@@ -13,10 +13,10 @@ Review current source
         ↓
 Add a short note
         ↓
-Save to Inbox
+Save & analyze
 ```
 
-It does not download video, crawl feeds, collect comments, or run a persistent content script.
+The extension itself does not download video, crawl feeds, collect comments, or run a persistent content script. The local Enjoy Journal server receives the saved URL and performs the source import.
 
 ## Architecture
 
@@ -74,8 +74,8 @@ chrome://extensions
 1. Open a Facebook Reel, YouTube Short, or other useful web page.
 2. Click the extension icon.
 3. Add why the moment is worth saving.
-4. Click **Save to Inbox**.
-5. Open the Inbox and attach media later.
+4. Click **Save & analyze**.
+5. The local server starts importing media and building the lesson automatically. Open Inbox only when you want to watch progress or handle a fallback.
 
 ## Connection Settings
 
@@ -94,7 +94,7 @@ The extension intentionally does not:
 - scrape Facebook feeds
 - read comments
 - monitor browsing in the background
-- download media
+- download media inside the browser extension
 - execute remote JavaScript
 - connect to arbitrary remote servers in the MVP
 
@@ -107,5 +107,5 @@ yarn extension:package
 Output:
 
 ```text
-dist/enjoy-journal-extension-v0.6.0.zip
+dist/enjoy-journal-extension-v0.7.0.zip
 ```

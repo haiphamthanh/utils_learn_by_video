@@ -2,6 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 
 import { config } from "../config.js";
+import { startAutomaticPipeline } from "../services/automation.service.js";
 import {
   createInboxItem,
   getInboxItem,
@@ -61,7 +62,34 @@ export function createInboxRouter() {
 
   router.post("/", (req, res, next) => {
     try {
-      res.status(201).json({ data: createInboxItem(req.body), error: null });
+      const item = createInboxItem(req.body);
+      const shouldAutoProcess =
+        config.autoProcessUrls &&
+        req.body?.autoProcess !== false &&
+        Boolean(item.sourceUrl);
+
+      const automatic = shouldAutoProcess
+        ? startAutomaticPipeline(item.id)
+        : { started: false, reason: "DISABLED" };
+
+      res.status(201).json({
+        data: {
+          ...getInboxItem(item.id),
+          automaticProcessing: automatic
+        },
+        error: null
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/:id/auto-process", (req, res, next) => {
+    try {
+      res.status(202).json({
+        data: startAutomaticPipeline(req.params.id),
+        error: null
+      });
     } catch (error) {
       next(error);
     }

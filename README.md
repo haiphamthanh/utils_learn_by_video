@@ -6,29 +6,27 @@ A local-first application for saving meaningful short videos and turning them in
 
 ## Current Version
 
-**v0.6.0 — Phase 7 Chrome Extension Capture**
+**v0.7.0 — Automatic URL-to-Lesson Pipeline**
 
 ```text
 Click browser extension
     ↓
 Save current URL + title + note
     ↓
-Inbox
+Automatically import media locally
     ↓
-Attach local media
+FFmpeg normalization
     ↓
-Process with FFmpeg
+Whisper timed transcript
     ↓
-Create timed transcript
+Lesson generation
     ↓
-Review only incorrect lines
-    ↓
-Generate lesson.json
-    ↓
-Open Learning Player
+LESSON_READY
     ↓
 Listen · Seek · Loop · Understand · Journal
 ```
+
+Manual media upload remains only as a fallback when a source cannot be imported automatically.
 
 ## What Works
 
@@ -57,6 +55,9 @@ Listen · Seek · Loop · Understand · Journal
 | Per-lesson Journal editing | Done |
 | Learning progress persistence | Done |
 | Chrome Extension capture | Done |
+| Automatic URL media acquisition | Done |
+| Automatic media → transcript → lesson orchestration | Done |
+| Manual upload fallback | Done |
 
 ## Quick Start
 
@@ -82,7 +83,7 @@ installs Yarn dependencies when needed
     ↓
 creates a compatible Python .venv
     ↓
-installs Whisper/OpenAI/Pydantic dependencies
+installs Whisper/OpenAI/Pydantic/yt-dlp dependencies
     ↓
 runs SQLite migrations
     ↓
@@ -91,63 +92,53 @@ starts Enjoy Journal
 
 ## Main Product Flow
 
-### 1. Capture
+### Default: one action
 
 ```text
 Interesting Reel / Short
         ↓
 Click Enjoy Journal extension
         ↓
-Review URL + title
-        ↓
 Add why it matters
         ↓
-Save to Inbox
+Save & analyze
+        ↓
+ACQUIRING_MEDIA
+        ↓
+PROCESSING
+        ↓
+TRANSCRIBING
+        ↓
+LESSON_GENERATING
+        ↓
+LESSON_READY
 ```
 
-The web app still supports manual source capture as a fallback.
+The server returns immediately after save. The complete pipeline continues locally in the background while Inbox shows progress.
 
-### 2. Prepare
+### Fallback only
+
+If URL acquisition fails because a source is unsupported or needs browser authentication:
 
 ```text
-Attach local media
+Automatic import failed
         ↓
-Process media
+Retry automatic analysis
+        or
+Attach media manually
         ↓
-audio.wav
-normalized.mp4
-poster.jpg
+Automatic pipeline continues from the next unfinished step
 ```
 
-### 3. Understand
+### Optional authenticated source import
 
-```text
-Create transcript
-        ↓
-Timed segments
-        ↓
-Review only wrong lines
-        ↓
-Generate lesson
+Default behavior does not read browser cookies. For a source that requires an existing browser login, the user can explicitly configure:
+
+```env
+MEDIA_COOKIE_BROWSER=chrome
 ```
 
-### 4. Learn
-
-```text
-Open Today or Library
-        ↓
-Open lesson
-        ↓
-Click sentence
-        ↓
-Video seeks to sentence
-        ↓
-Loop ×3
-        ↓
-Read meaning / phrase
-        ↓
-Write personal example
-```
+Supported values follow the local `yt-dlp --cookies-from-browser` syntax. Leave this blank unless it is needed.
 
 ## Chrome Extension Capture
 
@@ -200,9 +191,11 @@ Click extension icon
         ↓
 Add a short note
         ↓
-Save to Inbox
+Save & analyze
         ↓
-Open Inbox later and attach media
+Close the social platform
+        ↓
+Open Enjoy Journal when the lesson is ready
 ```
 
 ### Connection
@@ -227,6 +220,24 @@ yarn extension:package
 ```
 
 More detail: `docs/CHROME_EXTENSION.md`.
+
+## Automatic URL Analysis Configuration
+
+```env
+AUTO_PROCESS_URLS=true
+MEDIA_ACQUISITION_PROVIDER=yt-dlp
+MEDIA_COOKIE_BROWSER=
+```
+
+`yt-dlp` is installed inside the project `.venv` by `./start.sh`. FFmpeg/FFprobe remain system dependencies and are installed automatically when possible.
+
+Useful commands:
+
+```bash
+yarn smoke:auto
+yarn setup:python
+./scripts/doctor.sh
+```
 
 ## Learning Player
 

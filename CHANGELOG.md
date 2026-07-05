@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.7.0 — Automatic URL-to-Lesson Pipeline
+
+### Changed
+
+- Saving a URL now starts local analysis automatically by default.
+- `Waiting for media` is no longer the primary workflow.
+- Manual upload is retained only as a fallback.
+- Chrome Extension CTA changed from **Save to Inbox** to **Save & analyze**.
+
+### Added
+
+- `source_acquisition_jobs` database table.
+- `ACQUIRING_MEDIA` and `MEDIA_ACQUISITION_FAILED` states.
+- Local media acquisition with `yt-dlp`.
+- `yt-dlp` installation inside the project Python environment.
+- Automatic orchestration across acquisition, FFmpeg processing, transcription and lesson generation.
+- Retry automatic analysis endpoint and Inbox action.
+- Optional explicit `MEDIA_COOKIE_BROWSER` configuration.
+- `yarn smoke:auto`.
+
+### Preserved
+
+- Existing upload, media processing, transcription, lesson and Learning Player contracts.
+- Existing v0.6.0 `data/` content.
+- Manual media upload for unsupported or inaccessible sources.
+- No browser cookies are read by default.
+
 ## 0.6.0 — Phase 7 Chrome Extension Capture
 
 ### Added

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Enjoy Journal Capture",
-  "version": "0.6.0",
-  "description": "Save the current short-video page to your local Enjoy Journal Inbox.",
+  "version": "0.7.0",
+  "description": "Save a short-video page and start automatic local analysis in Enjoy Journal.",
   "permissions": [
     "activeTab",
     "scripting",

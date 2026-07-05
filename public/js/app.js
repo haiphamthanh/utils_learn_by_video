@@ -6,6 +6,7 @@ import {
   listInbox,
   listLessons,
   processMedia,
+  startAutomaticAnalysis,
   transcribeMedia,
   updateTranscriptSegment,
   uploadMedia
@@ -90,7 +91,9 @@ function sourceName(type) {
 
 function statusName(status) {
   return {
-    WAITING_MEDIA: "Waiting for media",
+    WAITING_MEDIA: "Waiting for automatic import",
+    ACQUIRING_MEDIA: "Importing media from URL",
+    MEDIA_ACQUISITION_FAILED: "Automatic import failed",
     READY_TO_PROCESS: "Ready to process",
     PROCESSING: "Processing media",
     MEDIA_READY: "Media ready",
@@ -108,6 +111,10 @@ function statusName(status) {
 function stageName(stage) {
   return {
     QUEUED: "Queued",
+    FETCH_SOURCE: "Opening source URL",
+    DOWNLOAD_MEDIA: "Downloading media locally",
+    FINALIZE_MEDIA: "Finalizing local media",
+    REGISTER_MEDIA: "Registering media",
     VALIDATE: "Validating media",
     PREPARE_MEDIA: "Preparing audio and video",
     SAVE_ARTIFACTS: "Saving media artifacts",
@@ -142,7 +149,7 @@ function displayTitle(item) {
 
 function ensurePolling(items) {
   const hasActiveJob = items.some((item) =>
-    ["PROCESSING", "TRANSCRIBING", "LESSON_GENERATING"].includes(item.status)
+    ["ACQUIRING_MEDIA", "PROCESSING", "TRANSCRIBING", "LESSON_GENERATING"].includes(item.status)
   );
 
   if (hasActiveJob && !activePollTimer) {
@@ -158,7 +165,7 @@ function ensurePolling(items) {
 }
 
 function setProgress(item, detail, label, progressBar) {
-  if (!["PROCESSING", "TRANSCRIBING", "LESSON_GENERATING"].includes(item.status)) {
+  if (!["ACQUIRING_MEDIA", "PROCESSING", "TRANSCRIBING", "LESSON_GENERATING"].includes(item.status)) {
     return;
   }
 
@@ -166,7 +173,10 @@ function setProgress(item, detail, label, progressBar) {
   let progress = 0;
   let stage = "QUEUED";
 
-  if (item.status === "PROCESSING") {
+  if (item.status === "ACQUIRING_MEDIA") {
+    progress = item.acquisitionProgress || 0;
+    stage = item.acquisitionStage;
+  } else if (item.status === "PROCESSING") {
     progress = item.processingProgress || 0;
     stage = item.processingStage;
   } else if (item.status === "TRANSCRIBING") {
@@ -443,6 +453,7 @@ async function refreshInbox({ quiet = false } = {}) {
       const uploadAction = fragment.querySelector(".upload-action");
       const uploadLabel = fragment.querySelector(".upload-label");
       const mediaFilename = fragment.querySelector(".media-filename");
+      const autoAction = fragment.querySelector(".auto-action");
       const processAction = fragment.querySelector(".process-action");
       const transcribeAction = fragment.querySelector(".transcribe-action");
       const generateLessonAction = fragment.querySelector(".generate-lesson-action");
@@ -471,9 +482,10 @@ async function refreshInbox({ quiet = false } = {}) {
         mediaFilename.textContent = item.mediaFilename;
       }
 
-      const active = ["PROCESSING", "TRANSCRIBING", "LESSON_GENERATING"].includes(item.status);
+      const active = ["ACQUIRING_MEDIA", "PROCESSING", "TRANSCRIBING", "LESSON_GENERATING"].includes(item.status);
       if (active) {
         uploadAction.hidden = true;
+        autoAction.hidden = true;
         processAction.hidden = true;
         transcribeAction.hidden = true;
         generateLessonAction.hidden = true;
@@ -481,6 +493,19 @@ async function refreshInbox({ quiet = false } = {}) {
       }
 
       setProgress(item, processingDetail, processingLabel, progressBar);
+
+      if ([
+        "WAITING_MEDIA",
+        "MEDIA_ACQUISITION_FAILED",
+        "FAILED",
+        "TRANSCRIPTION_FAILED",
+        "LESSON_FAILED"
+      ].includes(item.status)) {
+        autoAction.hidden = false;
+        autoAction.textContent = item.status === "WAITING_MEDIA"
+          ? "Analyze URL automatically"
+          : "Retry automatic analysis";
+      }
 
       if (["READY_TO_PROCESS", "FAILED"].includes(item.status)) {
         processAction.hidden = false;
@@ -547,6 +572,18 @@ async function refreshInbox({ quiet = false } = {}) {
           window.alert(error.message);
           uploadLabel.textContent = "Attach media";
           mediaInput.disabled = false;
+        }
+      });
+
+      autoAction.addEventListener("click", async () => {
+        autoAction.disabled = true;
+        autoAction.textContent = "Starting automatic analysis…";
+        try {
+          await startAutomaticAnalysis(item.id);
+          await refreshInbox();
+        } catch (error) {
+          window.alert(error.message);
+          await refreshInbox();
         }
       });
 
@@ -660,7 +697,8 @@ captureForm.addEventListener("submit", async (event) => {
             ? "youtube"
             : null
     },
-    personalNote: formData.get("personalNote")
+    personalNote: formData.get("personalNote"),
+    autoProcess: true
   };
 
   captureError.hidden = true;

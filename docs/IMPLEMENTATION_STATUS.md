@@ -2,45 +2,95 @@
 
 ## Current Phase
 
-Phase 7 — Chrome Extension Capture
+Phase 8 — Automatic URL-to-Lesson Pipeline
 
 ## Completed
 
 - [x] Repository structure
 - [x] Express server and SQLite persistence
-- [x] Inbox capture and media upload
+- [x] Browser and web source capture
+- [x] Automatic URL media acquisition with `yt-dlp`
+- [x] Automatic URL → media → transcript → lesson orchestration
+- [x] Source acquisition job persistence and progress
+- [x] Retry automatic analysis from the failed step
+- [x] Manual media upload fallback
+- [x] Optional explicit browser-cookie source configuration
 - [x] FFmpeg validation and normalization
 - [x] Local Whisper transcription
 - [x] Optional OpenAI transcription provider
-- [x] Timed transcript persistence
-- [x] Raw / cleaned / reviewed transcript layers
+- [x] Timed transcript persistence and correction
 - [x] Offline and OpenAI lesson providers
-- [x] Versioned `lesson.json` artifacts
-- [x] Today lesson queue
-- [x] Searchable Library
-- [x] Dedicated Learning Player
-- [x] Timed transcript synchronization and sentence seek
-- [x] Sentence Loop ×3 and playback speed controls
-- [x] Meaning, phrases and lesson-centric Journal
-- [x] Learning progress persistence
+- [x] Versioned lesson artifacts
+- [x] Today and searchable Library
+- [x] Learning Player with seek, highlight and Loop ×3
+- [x] Per-lesson Journal and learning progress
 - [x] Manifest V3 Chrome Extension
-- [x] Explicit-click page metadata capture
-- [x] Facebook Reel detection and URL normalization
-- [x] YouTube Short detection and URL normalization
-- [x] Personal note capture in extension popup
-- [x] Service-worker API submission
-- [x] Connected / Offline server state
-- [x] Configurable localhost server port
-- [x] Open Inbox action after save
-- [x] Extension package command
-- [x] Extension smoke test
-- [x] Existing media/transcription/lesson/learning smoke tests preserved
+- [x] Automatic acquisition smoke test
+- [x] Existing media/transcription/lesson/learning/extension regressions preserved
+
+## Default Flow
+
+```text
+Reel / Short URL
+  ↓
+Save & analyze
+  ↓
+ACQUIRING_MEDIA
+  ↓
+PROCESSING
+  ↓
+TRANSCRIBING
+  ↓
+LESSON_GENERATING
+  ↓
+LESSON_READY
+```
+
+No manual upload is required when the source can be imported automatically.
+
+## Fallback Flow
+
+```text
+MEDIA_ACQUISITION_FAILED
+  ↓
+Retry automatic analysis
+  or
+Attach media manually
+  ↓
+Automatic pipeline resumes from the next unfinished step
+```
+
+## Current Source Acquisition Architecture
+
+```text
+Source URL
+  ↓
+source_acquisition_jobs
+  ↓
+yt-dlp in project .venv
+  ↓
+local acquired media
+  ↓
+existing media_assets contract
+  ↓
+existing Phase 3–6 pipeline
+```
+
+## Privacy Boundary
+
+Default:
+
+```text
+MEDIA_COOKIE_BROWSER=
+```
+
+The application does not read browser cookies unless the user explicitly configures a browser source. The automatic importer only runs for a URL the user explicitly saves or retries.
 
 ## In Progress
 
-- [ ] End-to-end extension verification in Chrome on the user's Mac
-- [ ] End-to-end verification with a real local Whisper transcript
-- [ ] Usability feedback for popup wording and sentence-loop timing
+- [ ] End-to-end verification against the user's real Facebook Reel on the user's Mac
+- [ ] Tune Facebook authentication fallback if the Reel is login-gated
+- [ ] Observe local Whisper speed with real short videos
 
 ## Not Started
 
@@ -50,102 +100,31 @@ Phase 7 — Chrome Extension Capture
 - [ ] Spaced review scheduling
 - [ ] Optional private remote access
 
-## Current Flow
-
-```text
-Interesting Reel / Short
-  ↓
-Click extension
-  ↓
-Save URL + title + note
-  ↓
-Inbox
-  ↓
-Attach media
-  ↓
-Process media
-  ↓
-Create transcript
-  ↓
-Review incorrect segments
-  ↓
-Generate lesson
-  ↓
-Open Today / Library
-  ↓
-Listen + Seek + Loop
-  ↓
-Meaning + Phrases + Journal
-```
-
-## Extension Architecture
-
-```text
-Toolbar click
-  ↓
-activeTab permission
-  ↓
-Read page title + canonical URL once
-  ↓
-Popup note
-  ↓
-Service worker
-  ↓
-POST /api/inbox
-```
-
-No persistent page observer is installed.
-
-## Extension Permissions
-
-| Permission | Purpose |
-|---|---|
-| `activeTab` | Temporary access after an explicit toolbar click |
-| `scripting` | Read current page title and canonical URL |
-| `storage` | Remember local server URL |
-| localhost host permissions | Send capture to Enjoy Journal |
-
-## Security Boundaries
-
-The Phase 7 extension does not:
-
-- download social-media video,
-- crawl feeds,
-- collect comments,
-- monitor browsing continuously,
-- execute remotely hosted JavaScript,
-- connect to arbitrary remote servers.
-
 ## Acceptance Criteria
 
 ```text
-Enjoy Journal server running
-    ↓
-Open Facebook Reel
+Open Reel / Short
     ↓
 Click extension
     ↓
-Popup identifies Facebook Reel
+Save & analyze
     ↓
-Add note
+No manual upload
     ↓
-Save to Inbox
+Local media appears
     ↓
-Success state appears
+Transcript appears
     ↓
-Open Inbox
-    ↓
-Saved item exists with URL + title + note
+Lesson becomes ready
 ```
 
-The same capture path must also work for a YouTube Short and a generic HTTPS page.
+If automatic acquisition cannot access the source, the item must show an actionable error and retain manual upload as fallback.
 
 ## Known Constraints
 
 | Constraint | Impact | Handling |
 |---|---|---|
-| Extension is loaded unpacked | Manual install after code update | Chrome Developer mode |
-| MVP server is local-only | No capture to remote server yet | Intentional privacy boundary |
-| Page title quality depends on source metadata | Some social pages may have generic titles | URL and personal note remain primary |
-| Extension does not acquire media | User still attaches media manually | Preserve legal/architectural separation |
-| Top-level Journal is still a placeholder | Reflection remains lesson-centric | Build in Phase 8 |
+| Social platforms change frequently | A source extractor can break | Keep `yt-dlp` current and retain manual fallback |
+| Some videos require login | Anonymous acquisition may fail | Optional explicit `MEDIA_COOKIE_BROWSER` |
+| First Whisper run may download a model | Initial transcription takes longer | Model is cached locally afterward |
+| Background pipeline stops if server is closed | Current step is marked interrupted | Retry automatic analysis |

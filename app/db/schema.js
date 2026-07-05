@@ -39,6 +39,21 @@ CREATE TABLE IF NOT EXISTS media_assets (
   FOREIGN KEY(inbox_item_id) REFERENCES inbox_items(id)
 );
 
+CREATE TABLE IF NOT EXISTS source_acquisition_jobs (
+  id TEXT PRIMARY KEY,
+  inbox_item_id TEXT NOT NULL,
+  source_url TEXT NOT NULL,
+  status TEXT NOT NULL,
+  stage TEXT NOT NULL,
+  progress INTEGER NOT NULL DEFAULT 0,
+  error_code TEXT,
+  error_message TEXT,
+  started_at TEXT NOT NULL,
+  completed_at TEXT,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(inbox_item_id) REFERENCES inbox_items(id)
+);
+
 CREATE TABLE IF NOT EXISTS processing_jobs (
   id TEXT PRIMARY KEY,
   inbox_item_id TEXT NOT NULL,
@@ -165,6 +180,9 @@ CREATE INDEX IF NOT EXISTS idx_inbox_updated_at
 
 CREATE INDEX IF NOT EXISTS idx_media_inbox_item
   ON media_assets(inbox_item_id);
+
+CREATE INDEX IF NOT EXISTS idx_source_acquisition_jobs_inbox
+  ON source_acquisition_jobs(inbox_item_id, started_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_processing_jobs_inbox
   ON processing_jobs(inbox_item_id, started_at DESC);

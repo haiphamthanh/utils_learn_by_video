@@ -24,7 +24,7 @@ is_whisper_python() {
   local python_bin="$1"
   "$python_bin" - <<'PY' >/dev/null 2>&1
 import sys
-raise SystemExit(0 if (3, 8) <= sys.version_info[:2] <= (3, 11) else 1)
+raise SystemExit(0 if (3, 10) <= sys.version_info[:2] <= (3, 11) else 1)
 PY
 }
 
@@ -80,7 +80,7 @@ if [ -z "$PYTHON_BIN" ] && [ "$(uname -s)" = "Darwin" ]; then
 fi
 
 if [ -z "$PYTHON_BIN" ]; then
-  echo "A Python 3.8-3.11 runtime is required for local Whisper."
+  echo "A Python 3.10-3.11 runtime is required for local Whisper and automatic URL import."
   echo "Install Python 3.11, then rerun ./start.sh."
   exit 1
 fi
@@ -136,6 +136,7 @@ fi
 
 .venv/bin/python - <<'PY'
 import whisper
+import yt_dlp
 from openai import OpenAI
 from pydantic import BaseModel
 

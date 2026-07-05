@@ -139,7 +139,7 @@ async function handleSave(event) {
   if (!response.ok) {
     setMessage(response.error.message, "error");
     saveButton.disabled = false;
-    saveButton.textContent = "Save to Inbox";
+    saveButton.textContent = "Save & analyze";
     return;
   }
 
@@ -196,7 +196,7 @@ function resetSavedState() {
   savedState.hidden = true;
   captureForm.hidden = false;
   personalNote.value = "";
-  saveButton.textContent = "Save to Inbox";
+  saveButton.textContent = "Save & analyze";
   saveButton.disabled = !capture;
   personalNote.focus();
 }

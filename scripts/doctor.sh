@@ -73,12 +73,13 @@ fi
 if [ -x .venv/bin/python ]; then
   if .venv/bin/python - <<'PY' >/dev/null 2>&1
 import whisper
+import yt_dlp
 from openai import OpenAI
 PY
   then
-    printf "✓ Python transcription environment\n"
+    printf "✓ Python AI + URL acquisition environment\n"
   else
-    printf "✗ Python transcription environment\n"
+    printf "✗ Python AI + URL acquisition environment\n"
     printf "  Repair with: yarn setup:python\n"
     failures=$((failures + 1))
   fi

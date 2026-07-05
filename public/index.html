@@ -54,7 +54,7 @@
       <section id="inbox-page" class="page" hidden>
         <div class="section-heading">
           <div>
-            <p class="eyebrow">Capture now, learn later</p>
+            <p class="eyebrow">Save once, analyze automatically</p>
             <h1>Inbox</h1>
           </div>
 
@@ -65,8 +65,14 @@
 
         <div class="filter-row">
           <button class="filter-chip is-active" data-status-filter="">All</button>
+          <button class="filter-chip" data-status-filter="ACQUIRING_MEDIA">
+            Importing URL
+          </button>
+          <button class="filter-chip" data-status-filter="MEDIA_ACQUISITION_FAILED">
+            Import needs attention
+          </button>
           <button class="filter-chip" data-status-filter="WAITING_MEDIA">
-            Waiting for media
+            Manual fallback
           </button>
           <button class="filter-chip" data-status-filter="READY_TO_PROCESS">
             Ready to process
@@ -186,7 +192,7 @@
             Cancel
           </button>
           <button class="primary-action" type="submit">
-            Save to Inbox
+            Save & analyze
           </button>
         </div>
       </form>
@@ -206,6 +212,9 @@
         </div>
 
         <div class="inbox-card-action">
+          <button class="auto-action" type="button" hidden>
+            Retry automatic analysis
+          </button>
           <label class="upload-action">
             <span class="upload-label">Attach media</span>
             <input
