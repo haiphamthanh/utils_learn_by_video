@@ -1,14 +1,17 @@
 {
   "name": "enjoy-journal",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Local-first personal English listening and language journal.",
   "type": "module",
+  "packageManager": "yarn@1.22.22",
   "scripts": {
     "dev": "node --watch app/server.js",
     "start": "node app/server.js",
     "migrate": "node app/db/migrate.js",
-    "doctor": "bash scripts/doctor.sh"
+    "doctor": "bash scripts/doctor.sh",
+    "check": "node --check app/server.js && node --check app/routes/inbox.routes.js && node --check app/services/inbox.service.js && node --check app/services/media.service.js && node --check app/services/pipeline.service.js && node --check public/js/app.js",
+    "smoke:media": "bash scripts/smoke-media.sh"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",

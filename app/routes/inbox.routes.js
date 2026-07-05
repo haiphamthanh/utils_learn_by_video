@@ -9,6 +9,10 @@ import {
   attachMedia
 } from "../services/inbox.service.js";
 import { createMediaUploadStorage } from "../services/media.service.js";
+import {
+  getProcessingStatus,
+  startMediaProcessing
+} from "../services/pipeline.service.js";
 
 const allowedMediaTypes = new Set([
   "video/mp4",
@@ -77,6 +81,24 @@ export function createInboxRouter() {
 
       const result = attachMedia(req.params.id, req.file);
       res.status(201).json({ data: result, error: null });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/:id/process", (req, res, next) => {
+    try {
+      const result = startMediaProcessing(req.params.id);
+      res.status(202).json({ data: result, error: null });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/:id/status", (req, res, next) => {
+    try {
+      const result = getProcessingStatus(req.params.id);
+      res.json({ data: result, error: null });
     } catch (error) {
       next(error);
     }

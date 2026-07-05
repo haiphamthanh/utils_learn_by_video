@@ -95,6 +95,8 @@ export function listInboxItems({ status = null } = {}) {
       i.id,
       i.status,
       i.personal_note AS personalNote,
+      i.error_code AS errorCode,
+      i.error_message AS errorMessage,
       i.created_at AS createdAt,
       i.updated_at AS updatedAt,
       s.type AS sourceType,
@@ -104,10 +106,23 @@ export function listInboxItems({ status = null } = {}) {
       m.id AS mediaAssetId,
       m.original_filename AS mediaFilename,
       m.media_type AS mediaType,
-      m.size_bytes AS mediaSizeBytes
+      m.size_bytes AS mediaSizeBytes,
+      m.duration_ms AS durationMs,
+      CASE WHEN m.normalized_video_path IS NOT NULL THEN 1 ELSE 0 END AS hasNormalizedVideo,
+      CASE WHEN m.normalized_audio_path IS NOT NULL THEN 1 ELSE 0 END AS hasNormalizedAudio,
+      CASE WHEN m.poster_path IS NOT NULL THEN 1 ELSE 0 END AS hasPoster,
+      j.stage AS processingStage,
+      j.progress AS processingProgress
     FROM inbox_items i
     LEFT JOIN sources s ON s.id = i.source_id
     LEFT JOIN media_assets m ON m.inbox_item_id = i.id
+    LEFT JOIN processing_jobs j ON j.id = (
+      SELECT id
+      FROM processing_jobs
+      WHERE inbox_item_id = i.id
+      ORDER BY started_at DESC
+      LIMIT 1
+    )
   `;
 
   const params = [];
@@ -123,6 +138,7 @@ export function listInboxItems({ status = null } = {}) {
 }
 
 export function getInboxItem(id) {
+  const db = getDatabase();
   const item = listInboxItems().find((entry) => entry.id === id);
   if (!item) throw notFound();
   return item;
@@ -132,7 +148,7 @@ export function attachMedia(inboxItemId, uploadedFile) {
   const db = getDatabase();
 
   const existing = db
-    .prepare("SELECT id FROM inbox_items WHERE id = ?")
+    .prepare("SELECT id, status FROM inbox_items WHERE id = ?")
     .get(inboxItemId);
 
   if (!existing) {
@@ -140,14 +156,30 @@ export function attachMedia(inboxItemId, uploadedFile) {
     throw notFound();
   }
 
+  if (existing.status === "PROCESSING") {
+    fs.rmSync(uploadedFile.path, { force: true });
+    throw badRequest("MEDIA_LOCKED", "Media cannot be replaced while processing.");
+  }
+
   const oldMedia = db
-    .prepare("SELECT original_path AS originalPath FROM media_assets WHERE inbox_item_id = ?")
+    .prepare(`
+      SELECT
+        original_path AS originalPath,
+        normalized_video_path AS normalizedVideoPath,
+        normalized_audio_path AS normalizedAudioPath,
+        poster_path AS posterPath
+      FROM media_assets
+      WHERE inbox_item_id = ?
+    `)
     .get(inboxItemId);
 
   const mediaAssetId = makeId("media");
   const createdAt = nowIso();
 
   const transaction = db.transaction(() => {
+    db.prepare("DELETE FROM processing_jobs WHERE inbox_item_id = ?")
+      .run(inboxItemId);
+
     db.prepare("DELETE FROM media_assets WHERE inbox_item_id = ?")
       .run(inboxItemId);
 
@@ -180,8 +212,15 @@ export function attachMedia(inboxItemId, uploadedFile) {
 
   transaction();
 
-  if (oldMedia?.originalPath && oldMedia.originalPath !== uploadedFile.path) {
-    fs.rmSync(oldMedia.originalPath, { force: true });
+  for (const oldPath of [
+    oldMedia?.originalPath,
+    oldMedia?.normalizedVideoPath,
+    oldMedia?.normalizedAudioPath,
+    oldMedia?.posterPath
+  ]) {
+    if (oldPath && oldPath !== uploadedFile.path) {
+      fs.rmSync(oldPath, { force: true });
+    }
   }
 
   return getInboxItem(inboxItemId);

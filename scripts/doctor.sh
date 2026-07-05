@@ -19,9 +19,18 @@ echo "Enjoy Journal Doctor"
 echo
 
 check_command node "Node.js"
-check_command npm "npm"
 check_command python3 "Python 3"
 check_command ffmpeg "FFmpeg"
+check_command ffprobe "FFprobe"
+
+if command -v yarn >/dev/null 2>&1; then
+  printf "✓ Yarn\n"
+elif command -v corepack >/dev/null 2>&1; then
+  printf "✓ Yarn via Corepack\n"
+else
+  printf "✗ Yarn or Corepack\n"
+  failures=$((failures + 1))
+fi
 
 echo
 

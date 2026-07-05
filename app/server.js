@@ -6,11 +6,16 @@ import { config } from "./config.js";
 import { initializeDatabase } from "./db/database.js";
 import { createInboxRouter } from "./routes/inbox.routes.js";
 import { createHealthRouter } from "./routes/health.routes.js";
+import { recoverInterruptedProcessingJobs } from "./services/pipeline.service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 initializeDatabase();
+const recoveredJobs = recoverInterruptedProcessingJobs();
+if (recoveredJobs > 0) {
+  console.log(`Recovered ${recoveredJobs} interrupted processing job(s).`);
+}
 
 const app = express();
 

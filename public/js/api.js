@@ -35,3 +35,13 @@ export function uploadMedia(inboxId, file) {
     body
   });
 }
+
+export function processMedia(inboxId) {
+  return request(`/api/inbox/${inboxId}/process`, {
+    method: "POST"
+  });
+}
+
+export function getProcessingStatus(inboxId) {
+  return request(`/api/inbox/${inboxId}/status`);
+}

@@ -1,4 +1,9 @@
-import { createInbox, listInbox, uploadMedia } from "./api.js";
+import {
+  createInbox,
+  listInbox,
+  processMedia,
+  uploadMedia
+} from "./api.js";
 
 const pages = [...document.querySelectorAll(".page")];
 const navLinks = [...document.querySelectorAll(".nav-link")];
@@ -11,6 +16,7 @@ const inboxTemplate = document.querySelector("#inbox-card-template");
 const statusFilters = [...document.querySelectorAll("[data-status-filter]")];
 
 let currentStatusFilter = "";
+let processingPollTimer = null;
 
 function showPage(pageName) {
   pages.forEach((page) => {
@@ -22,7 +28,7 @@ function showPage(pageName) {
   });
 
   if (pageName === "inbox") {
-    refreshInbox();
+    void refreshInbox();
   }
 }
 
@@ -41,10 +47,21 @@ function statusName(status) {
     WAITING_MEDIA: "Waiting for media",
     READY_TO_PROCESS: "Ready to process",
     PROCESSING: "Processing",
-    READY: "Ready",
+    MEDIA_READY: "Media ready",
     FAILED: "Failed",
     NEEDS_REVIEW: "Needs review"
   }[status] || status;
+}
+
+function stageName(stage) {
+  return {
+    QUEUED: "Queued",
+    VALIDATE: "Validating media",
+    PREPARE_MEDIA: "Preparing audio and video",
+    SAVE_ARTIFACTS: "Saving artifacts",
+    COMPLETE: "Media ready",
+    FAILED: "Processing failed"
+  }[stage] || stage || "Processing";
 }
 
 function displayTitle(item) {
@@ -58,12 +75,30 @@ function displayTitle(item) {
   }
 }
 
-async function refreshInbox() {
-  inboxList.innerHTML = `<div class="empty-card"><p>Loading Inbox…</p></div>`;
+function ensureProcessingPolling(items) {
+  const hasProcessing = items.some((item) => item.status === "PROCESSING");
+
+  if (hasProcessing && !processingPollTimer) {
+    processingPollTimer = window.setInterval(() => {
+      void refreshInbox({ quiet: true });
+    }, 1500);
+  }
+
+  if (!hasProcessing && processingPollTimer) {
+    window.clearInterval(processingPollTimer);
+    processingPollTimer = null;
+  }
+}
+
+async function refreshInbox({ quiet = false } = {}) {
+  if (!quiet) {
+    inboxList.innerHTML = `<div class="empty-card"><p>Loading Inbox…</p></div>`;
+  }
 
   try {
     const allItems = await listInbox("");
     inboxCount.textContent = allItems.length;
+    ensureProcessingPolling(allItems);
 
     const items = currentStatusFilter
       ? allItems.filter((item) => item.status === currentStatusFilter)
@@ -91,10 +126,17 @@ async function refreshInbox() {
       const sourceNote = fragment.querySelector(".source-note");
       const sourceLink = fragment.querySelector(".source-link");
       const mediaInput = fragment.querySelector(".media-input");
+      const uploadAction = fragment.querySelector(".upload-action");
       const uploadLabel = fragment.querySelector(".upload-label");
       const mediaFilename = fragment.querySelector(".media-filename");
+      const processAction = fragment.querySelector(".process-action");
+      const processingDetail = fragment.querySelector(".processing-detail");
+      const processingLabel = fragment.querySelector(".processing-label");
+      const progressBar = fragment.querySelector(".progress-bar");
+      const itemError = fragment.querySelector(".item-error");
 
       card.dataset.id = item.id;
+      card.dataset.status = item.status;
       sourceLabel.textContent = sourceName(item.sourceType);
       statusBadge.textContent = statusName(item.status);
       sourceTitle.textContent = displayTitle(item);
@@ -108,6 +150,31 @@ async function refreshInbox() {
         mediaFilename.textContent = item.mediaFilename;
       }
 
+      if (item.status === "PROCESSING") {
+        uploadAction.hidden = true;
+        processAction.hidden = true;
+        processingDetail.hidden = false;
+        const progress = Math.max(0, Math.min(100, item.processingProgress || 0));
+        progressBar.style.width = `${progress}%`;
+        processingLabel.textContent = `${stageName(item.processingStage)} · ${progress}%`;
+      }
+
+      if (["READY_TO_PROCESS", "FAILED", "MEDIA_READY"].includes(item.status)) {
+        processAction.hidden = false;
+        processAction.textContent =
+          item.status === "FAILED"
+            ? "Retry processing"
+            : item.status === "MEDIA_READY"
+              ? "Reprocess media"
+              : "Process media";
+      }
+
+      if (item.errorMessage) {
+        itemError.hidden = false;
+        itemError.textContent = item.errorMessage;
+      }
+
+      mediaInput.disabled = item.status === "PROCESSING";
       mediaInput.addEventListener("change", async () => {
         const file = mediaInput.files?.[0];
         if (!file) return;
@@ -119,9 +186,22 @@ async function refreshInbox() {
           await uploadMedia(item.id, file);
           await refreshInbox();
         } catch (error) {
-          alert(error.message);
+          window.alert(error.message);
           uploadLabel.textContent = "Attach media";
           mediaInput.disabled = false;
+        }
+      });
+
+      processAction.addEventListener("click", async () => {
+        processAction.disabled = true;
+        processAction.textContent = "Starting…";
+
+        try {
+          await processMedia(item.id);
+          await refreshInbox();
+        } catch (error) {
+          window.alert(error.message);
+          await refreshInbox();
         }
       });
 
@@ -195,4 +275,4 @@ captureForm.addEventListener("submit", async (event) => {
   }
 });
 
-refreshInbox();
+void refreshInbox();

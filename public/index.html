@@ -78,6 +78,15 @@
           <button class="filter-chip" data-status-filter="READY_TO_PROCESS">
             Ready to process
           </button>
+          <button class="filter-chip" data-status-filter="PROCESSING">
+            Processing
+          </button>
+          <button class="filter-chip" data-status-filter="MEDIA_READY">
+            Media ready
+          </button>
+          <button class="filter-chip" data-status-filter="FAILED">
+            Failed
+          </button>
         </div>
 
         <div id="inbox-list" class="inbox-list" aria-live="polite"></div>
@@ -182,6 +191,16 @@
             />
           </label>
           <p class="media-filename"></p>
+          <div class="processing-detail" hidden>
+            <div class="progress-track" aria-hidden="true">
+              <span class="progress-bar"></span>
+            </div>
+            <p class="processing-label"></p>
+          </div>
+          <p class="item-error" hidden></p>
+          <button class="process-action" type="button" hidden>
+            Process media
+          </button>
         </div>
       </article>
     </template>
