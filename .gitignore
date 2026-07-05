@@ -1,0 +1,11 @@
+node_modules/
+.env
+data/journal.db
+data/inbox/*
+data/lessons/*
+data/temp/*
+!data/inbox/.gitkeep
+!data/lessons/.gitkeep
+!data/temp/.gitkeep
+.DS_Store
+*.log

@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Enjoy Journal — collect meaningful short videos and turn them into personal language lessons."
+    />
+    <title>Enjoy Journal</title>
+    <link rel="stylesheet" href="/styles/app.css" />
+  </head>
+
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Enjoy Journal home">
+        <span class="brand-mark">EJ</span>
+        <span>Enjoy Journal</span>
+      </a>
+
+      <nav class="nav" aria-label="Primary">
+        <button class="nav-link is-active" data-page="today">Today</button>
+        <button class="nav-link" data-page="inbox">
+          Inbox
+          <span class="count-badge" id="inbox-count">0</span>
+        </button>
+        <button class="nav-link" data-page="library">Library</button>
+        <button class="nav-link" data-page="journal">Journal</button>
+      </nav>
+    </header>
+
+    <main class="page-shell">
+      <section id="today-page" class="page">
+        <div class="hero">
+          <p class="eyebrow">A quiet place to learn</p>
+          <h1>Keep the moment.<br />Learn the language.</h1>
+          <p class="hero-copy">
+            Save short videos that matter to you, then turn them into listening,
+            speaking and journal material without returning to the feed.
+          </p>
+
+          <button class="primary-action" data-open-capture>
+            Save a new moment
+          </button>
+        </div>
+
+        <div class="today-panel">
+          <p class="eyebrow">Today</p>
+          <h2>Your next small moments</h2>
+          <div class="empty-card">
+            <span class="empty-icon">◎</span>
+            <h3>Start with one meaningful video</h3>
+            <p>
+              Save a source to Inbox, attach media, and Enjoy Journal will prepare
+              it for learning.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="inbox-page" class="page" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Capture now, learn later</p>
+            <h1>Inbox</h1>
+          </div>
+
+          <button class="primary-action" data-open-capture>
+            Add source
+          </button>
+        </div>
+
+        <div class="filter-row">
+          <button class="filter-chip is-active" data-status-filter="">All</button>
+          <button class="filter-chip" data-status-filter="WAITING_MEDIA">
+            Waiting for media
+          </button>
+          <button class="filter-chip" data-status-filter="READY_TO_PROCESS">
+            Ready to process
+          </button>
+        </div>
+
+        <div id="inbox-list" class="inbox-list" aria-live="polite"></div>
+      </section>
+
+      <section id="library-page" class="page" hidden>
+        <div class="placeholder-page">
+          <p class="eyebrow">Coming after the first learning loop</p>
+          <h1>Library</h1>
+          <p>
+            Processed lessons will live here. The MVP first completes capture,
+            persistence and media attachment.
+          </p>
+        </div>
+      </section>
+
+      <section id="journal-page" class="page" hidden>
+        <div class="placeholder-page">
+          <p class="eyebrow">Your ideas, not a feed</p>
+          <h1>Journal</h1>
+          <p>
+            This area will later surface phrases, examples and thoughts collected
+            from completed lessons.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="capture-dialog" class="capture-dialog">
+      <form id="capture-form" method="dialog">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">Save this moment</p>
+            <h2>Add to Inbox</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="Close">
+            ×
+          </button>
+        </div>
+
+        <label>
+          <span>Source type</span>
+          <select name="sourceType">
+            <option value="facebook-reel">Facebook Reel</option>
+            <option value="youtube-short">YouTube Short</option>
+            <option value="other-url">Other URL</option>
+          </select>
+        </label>
+
+        <label>
+          <span>Source URL</span>
+          <input
+            name="sourceUrl"
+            type="url"
+            placeholder="https://..."
+            required
+          />
+        </label>
+
+        <label>
+          <span>Why are you saving this?</span>
+          <textarea
+            name="personalNote"
+            rows="4"
+            placeholder="Interesting explanation, useful phrase, strong idea..."
+          ></textarea>
+        </label>
+
+        <p id="capture-error" class="form-error" hidden></p>
+
+        <div class="dialog-actions">
+          <button class="secondary-action" type="button" data-close-dialog>
+            Cancel
+          </button>
+          <button class="primary-action" type="submit">
+            Save to Inbox
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <template id="inbox-card-template">
+      <article class="inbox-card">
+        <div class="inbox-card-main">
+          <div class="inbox-meta">
+            <span class="source-label"></span>
+            <span class="status-badge"></span>
+          </div>
+
+          <h2 class="source-title"></h2>
+          <p class="source-note"></p>
+          <a class="source-link" target="_blank" rel="noreferrer">Open source</a>
+        </div>
+
+        <div class="inbox-card-action">
+          <label class="upload-action">
+            <span class="upload-label">Attach media</span>
+            <input
+              class="media-input"
+              type="file"
+              accept="video/mp4,video/webm,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav"
+            />
+          </label>
+          <p class="media-filename"></p>
+        </div>
+      </article>
+    </template>
+
+    <script type="module" src="/js/app.js"></script>
+  </body>
+</html>
