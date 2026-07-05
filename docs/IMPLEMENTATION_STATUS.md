@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 5 — Transcript Review & Lesson Generation
+Phase 6 — Learning Player
 
 ## Completed
 
@@ -16,35 +16,41 @@ Phase 5 — Transcript Review & Lesson Generation
 - [x] Automatic basic transcript cleaning
 - [x] Per-segment reviewed transcript editing
 - [x] Raw/cleaned/reviewed layer preservation
-- [x] `lessons` database table
-- [x] `lesson_generation_jobs` database table
-- [x] Lesson provider interface
-- [x] Offline `local-basic` provider
-- [x] OpenAI structured lesson provider
-- [x] Deterministic mock lesson provider
-- [x] Canonical `lesson.json` contract
-- [x] Lesson generation progress and recovery
-- [x] Lesson preview in Inbox
-- [x] Versioned lesson artifacts
-- [x] v0.3.0 → v0.4.0 migration compatibility test
-- [x] Media, transcription and lesson smoke tests
+- [x] Offline and OpenAI lesson providers
+- [x] Canonical versioned `lesson.json`
+- [x] Today lesson queue
+- [x] Searchable Library
+- [x] Dedicated Learning Player
+- [x] Video/audio byte-range streaming
+- [x] Timed transcript synchronization
+- [x] Click sentence to seek
+- [x] Active sentence highlighting
+- [x] Previous/next sentence navigation
+- [x] Sentence Loop ×3
+- [x] Playback speed controls
+- [x] Meaning tab
+- [x] Phrases and patterns tab
+- [x] Per-lesson Journal editing
+- [x] Journal SQLite persistence
+- [x] NEW / LEARNING / MASTERED progress
+- [x] Listen and shadow counters
+- [x] Journal/progress synchronization into lesson artifact
+- [x] Journal/progress copy-forward on lesson regeneration
+- [x] v0.4.0 → v0.5.0 migration compatibility test
+- [x] Media, transcription, lesson and learning smoke tests
 
 ## In Progress
 
 - [ ] End-to-end verification with a real user video and local Whisper on the user's Mac
-- [ ] End-to-end verification of OpenAI lesson generation when `OPENAI_API_KEY` is configured
+- [ ] End-to-end usability feedback for sentence loop timing
 
 ## Not Started
 
-- [ ] Synchronized video + transcript player
-- [ ] Click sentence to seek
-- [ ] Sentence loop
-- [ ] Playback speed controls
-- [ ] Meaning tab
-- [ ] Phrase tab
-- [ ] Journal editing and search
-- [ ] Library view
-- [ ] Chrome Extension
+- [ ] Chrome Extension capture
+- [ ] Top-level Journal index
+- [ ] Keyboard shortcuts
+- [ ] Mobile interaction refinement
+- [ ] Spaced review scheduling
 
 ## Current Flow
 
@@ -55,21 +61,37 @@ Attach media
   ↓
 Process media
   ↓
-MEDIA_READY
-  ↓
 Create transcript
-  ↓
-TRANSCRIPT_READY
   ↓
 Review incorrect segments
   ↓
 Generate lesson
   ↓
-LESSON_GENERATING
+Open Today / Library
   ↓
-LESSON_READY
+Open lesson
   ↓
-Preview phrases and patterns
+Listen + Seek + Loop
+  ↓
+Meaning + Phrases
+  ↓
+Journal
+```
+
+## Learning Surface Contract
+
+```text
+Media
+  +
+Timed transcript
+  +
+Meaning by segment
+  +
+Reusable phrases
+  +
+Personal journal
+  +
+Progress
 ```
 
 ## Data Preservation Rules
@@ -81,42 +103,70 @@ Preview phrases and patterns
 | Cleaned transcript | Yes, generated | Basic formatting layer |
 | Reviewed transcript | Yes, user action | Only explicit corrections |
 | Lesson artifact | Versioned | Regeneration creates another JSON file |
+| Journal | Yes, user action | Stored in DB and synchronized to artifact |
+| Learning progress | Yes | Stored in DB and synchronized to artifact |
 
-## Provider Modes
+## Today Selection
 
-| Provider | Network | API key | Purpose |
-|---|---:|---:|---|
-| `local-basic` | No | No | Offline lesson contract and basic practice material |
-| `openai` | Yes | Yes | Vietnamese meaning and deeper language analysis |
-| `mock` | No | No | Deterministic automated tests |
+```text
+NEW
+  ↓
+LEARNING
+```
+
+Limit:
+
+```text
+5 lessons
+```
+
+MASTERED lessons are excluded from Today.
+
+## Library Search Coverage
+
+- title
+- Vietnamese summary
+- topic
+- effective transcript text
+- generated key phrases and patterns
+- journal content
 
 ## Known Constraints
 
 | Constraint | Impact | Handling |
 |---|---|---|
-| Local-basic does not perform semantic translation | Vietnamese meaning may be empty | Switch to `LESSON_PROVIDER=openai` |
-| AI lesson quality depends on transcript quality | Incorrect transcript can produce poor lesson | Review only incorrect segments first |
-| OpenAI provider requires API key and network | Generation can fail offline | Local-basic remains the default fallback |
-| Progress during model/API work is approximate | One stage may remain visible for a while | Progress is informational only |
+| Local-basic meaning may be empty | Meaning tab can be empty | Use OpenAI lesson provider |
+| Loop timing is fixed at 900 ms | Pause may not suit every sentence | Make timing configurable later |
+| Native browser media controls remain visible | UI is less custom | Keeps MVP reliable and accessible |
+| Top-level Journal is still a placeholder | Journal is currently lesson-centric | Build Journal index after Extension |
+| Search uses SQLite `LIKE` | Not optimized for huge libraries | Sufficient for personal MVP |
 
-## Phase 5 Acceptance Criteria
+## Phase 6 Acceptance Criteria
 
 ```text
-TRANSCRIPT_READY
+LESSON_READY
     ↓
-Open Review transcript
+Open lesson
     ↓
-Correct one segment
+Video or audio loads
     ↓
-Refresh and correction remains
+Click transcript sentence
     ↓
-Generate lesson
+Media seeks correctly
     ↓
-lesson.json is saved
+Current sentence highlights
     ↓
-Refresh and lesson preview remains
+Loop ×3 completes
     ↓
-Regenerate lesson
+Shadow count increments
     ↓
-Previous artifact is still preserved
+Save journal note
+    ↓
+Refresh
+    ↓
+Journal and progress remain
+    ↓
+Search phrase/journal in Library
+    ↓
+Original lesson is found
 ```

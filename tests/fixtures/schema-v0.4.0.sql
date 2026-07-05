@@ -1,4 +1,3 @@
-export const schemaSql = `
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS sources (
@@ -137,26 +136,6 @@ CREATE TABLE IF NOT EXISTS lesson_generation_jobs (
   FOREIGN KEY(transcript_id) REFERENCES transcripts(id)
 );
 
-CREATE TABLE IF NOT EXISTS journal_entries (
-  id TEXT PRIMARY KEY,
-  lesson_id TEXT NOT NULL,
-  entry_type TEXT NOT NULL,
-  content TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  FOREIGN KEY(lesson_id) REFERENCES lessons(id)
-);
-
-CREATE TABLE IF NOT EXISTS learning_progress (
-  lesson_id TEXT PRIMARY KEY,
-  learning_status TEXT NOT NULL DEFAULT 'NEW',
-  listen_count INTEGER NOT NULL DEFAULT 0,
-  shadow_count INTEGER NOT NULL DEFAULT 0,
-  last_opened_at TEXT,
-  last_completed_at TEXT,
-  FOREIGN KEY(lesson_id) REFERENCES lessons(id)
-);
-
 CREATE INDEX IF NOT EXISTS idx_inbox_status
   ON inbox_items(status);
 
@@ -186,13 +165,3 @@ CREATE INDEX IF NOT EXISTS idx_lessons_transcript
 
 CREATE INDEX IF NOT EXISTS idx_lesson_jobs_inbox
   ON lesson_generation_jobs(inbox_item_id, started_at DESC);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_journal_lesson_type
-  ON journal_entries(lesson_id, entry_type);
-
-CREATE INDEX IF NOT EXISTS idx_journal_content
-  ON journal_entries(content);
-
-CREATE INDEX IF NOT EXISTS idx_learning_progress_status
-  ON learning_progress(learning_status, last_opened_at);
-`;

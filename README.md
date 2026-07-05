@@ -2,11 +2,11 @@
 
 > Keep the moment. Learn the language.
 
-A local-first application for saving meaningful short videos and turning them into reusable English listening, transcript-review and lesson material.
+A local-first application for saving meaningful short videos and turning them into reusable English listening, transcript-review, lesson and journal material.
 
 ## Current Version
 
-**v0.4.0 — Phase 5 Transcript Review & Lesson Generation**
+**v0.5.0 — Phase 6 Learning Player**
 
 ```text
 Save source URL
@@ -21,7 +21,9 @@ Review only incorrect lines
     ↓
 Generate lesson.json
     ↓
-Preview phrases and patterns
+Open Learning Player
+    ↓
+Listen · Seek · Loop · Understand · Journal
 ```
 
 ## What Works
@@ -34,14 +36,22 @@ Preview phrases and patterns
 | Local Whisper transcription | Done |
 | Optional OpenAI transcription | Done |
 | Timed transcript segments | Done |
-| Automatic basic transcript cleaning | Done |
 | Per-segment transcript correction | Done |
 | Raw transcript preservation | Done |
 | Offline `local-basic` lesson provider | Done |
 | Optional OpenAI structured lesson provider | Done |
 | Versioned `lesson.json` artifacts | Done |
-| Lesson preview in Inbox | Done |
-| Synchronized learning player | Next |
+| Today lesson queue | Done |
+| Searchable Library | Done |
+| Synchronized video/audio + transcript | Done |
+| Click sentence to seek | Done |
+| Active sentence highlighting | Done |
+| Sentence loop ×3 | Done |
+| 0.75× / 1× / 1.25× playback speed | Done |
+| Meaning tab | Done |
+| Phrases and patterns tab | Done |
+| Per-lesson Journal editing | Done |
+| Learning progress persistence | Done |
 | Chrome Extension | Later |
 
 ## Quick Start
@@ -74,6 +84,230 @@ runs SQLite migrations
     ↓
 starts Enjoy Journal
 ```
+
+## Main Product Flow
+
+### 1. Capture
+
+```text
+Interesting Reel / Short
+        ↓
+Save URL + note
+        ↓
+Inbox
+```
+
+### 2. Prepare
+
+```text
+Attach local media
+        ↓
+Process media
+        ↓
+audio.wav
+normalized.mp4
+poster.jpg
+```
+
+### 3. Understand
+
+```text
+Create transcript
+        ↓
+Timed segments
+        ↓
+Review only wrong lines
+        ↓
+Generate lesson
+```
+
+### 4. Learn
+
+```text
+Open Today or Library
+        ↓
+Open lesson
+        ↓
+Click sentence
+        ↓
+Video seeks to sentence
+        ↓
+Loop ×3
+        ↓
+Read meaning / phrase
+        ↓
+Write personal example
+```
+
+## Learning Player
+
+The Phase 6 learning surface combines the previously separate artifacts.
+
+```text
+┌───────────────────────────┬───────────────────────────┐
+│                           │ Listen                    │
+│                           │ Meaning                   │
+│       VIDEO / AUDIO       │ Phrases                   │
+│                           │ Journal                   │
+│                           │                           │
+├───────────────────────────┴───────────────────────────┤
+│ Previous · Next · Loop ×3 · 0.75× · 1× · 1.25×      │
+└───────────────────────────────────────────────────────┘
+```
+
+### Sentence Seek
+
+Click any transcript sentence:
+
+```text
+segment.startMs
+        ↓
+media.currentTime
+        ↓
+play from that sentence
+```
+
+### Active Sentence Highlighting
+
+```text
+media.currentTime
+        ↓
+find matching timed segment
+        ↓
+highlight transcript line
+```
+
+### Loop ×3
+
+```text
+Choose sentence
+        ↓
+Loop ×3
+        ↓
+Play sentence
+        ↓
+Pause 900 ms
+        ↓
+Repeat
+        ↓
+Record one completed shadow loop
+```
+
+### Playback Speed
+
+Available directly below the player:
+
+```text
+0.75×   1×   1.25×
+```
+
+## Today
+
+Today shows up to five lessons:
+
+```text
+NEW lessons first
+        ↓
+LEARNING lessons second
+        ↓
+MASTERED lessons excluded
+```
+
+Opening a lesson records:
+
+```text
+NEW
+  ↓
+LEARNING
+```
+
+## Library
+
+The Library searches across:
+
+- lesson title,
+- Vietnamese summary,
+- topic,
+- effective transcript text,
+- generated key phrases and patterns,
+- personal journal content.
+
+Filters:
+
+```text
+All
+New
+Learning
+Mastered
+```
+
+Only the latest generated lesson for each Inbox item is shown.
+
+## Journal
+
+The Learning Player currently stores four fields per lesson:
+
+```text
+Why I saved this
+My thought
+Favorite phrase
+My example
+```
+
+Journal data is stored in SQLite and synchronized back into the lesson artifact.
+
+Regenerating a lesson copies the latest journal and progress state into the new lesson version.
+
+## Learning Progress
+
+Each lesson tracks:
+
+```text
+status
+listenCount
+shadowCount
+lastOpenedAt
+lastCompletedAt
+```
+
+Status:
+
+```text
+NEW
+LEARNING
+MASTERED
+```
+
+Actions:
+
+```text
+OPENED
+LISTEN_COMPLETED
+SHADOW_COMPLETED
+MARK_LEARNING
+MARK_MASTERED
+```
+
+## Media Streaming
+
+Media is not copied into the public web directory.
+
+The backend serves lesson media through private application routes:
+
+```http
+GET /api/lessons/:id/media/video
+GET /api/lessons/:id/media/audio
+GET /api/lessons/:id/media/poster
+```
+
+Video and audio support HTTP byte ranges:
+
+```text
+Accept-Ranges: bytes
+Content-Range: bytes start-end/total
+```
+
+This is required for reliable browser seeking.
 
 ## Default Local-First Configuration
 
@@ -120,8 +354,6 @@ The OpenAI provider generates structured:
 - shadowing chunks,
 - maximum 3 comprehension questions.
 
-The worker validates source segment IDs before saving the lesson.
-
 ## Transcript Layers
 
 Enjoy Journal preserves three layers:
@@ -167,7 +399,66 @@ progress
 
 Re-generation creates a new artifact instead of silently overwriting the previous lesson.
 
-## API
+## Database Additions in v0.5.0
+
+```text
+journal_entries
+learning_progress
+```
+
+Relationships:
+
+```text
+lesson
+  ├── journal_entries
+  └── learning_progress
+```
+
+## Learning API
+
+### List lessons
+
+```http
+GET /api/lessons
+GET /api/lessons?q=AI
+GET /api/lessons?status=LEARNING
+```
+
+### Read lesson detail
+
+```http
+GET /api/lessons/:id
+```
+
+### Save journal
+
+```http
+PATCH /api/lessons/:id/journal
+Content-Type: application/json
+```
+
+```json
+{
+  "myThought": "This changes how I think about AI tools.",
+  "favoritePhrase": "I used to think...",
+  "myExample": "I used to think AI was just a chatbot."
+}
+```
+
+### Update progress
+
+```http
+POST /api/lessons/:id/progress
+Content-Type: application/json
+```
+
+```json
+{
+  "action": "SHADOW_COMPLETED"
+}
+```
+
+## Pipeline API
 
 ### Start media processing
 
@@ -191,31 +482,12 @@ GET /api/inbox/:id/transcript
 
 ```http
 PATCH /api/inbox/:id/transcript/segments/:segmentId
-Content-Type: application/json
-```
-
-```json
-{
-  "reviewedText": "Corrected sentence."
-}
 ```
 
 ### Generate lesson
 
 ```http
 POST /api/inbox/:id/lesson/generate
-```
-
-### Read lesson status
-
-```http
-GET /api/inbox/:id/lesson-status
-```
-
-### Read latest lesson
-
-```http
-GET /api/inbox/:id/lesson
 ```
 
 ## Smoke Tests
@@ -225,9 +497,15 @@ yarn check
 yarn smoke:media
 yarn smoke:transcription
 yarn smoke:lesson
+yarn smoke:learning
 ```
 
-`smoke:lesson` uses a deterministic mock provider and does not call an external AI service.
+`smoke:learning` verifies:
+
+- new SQLite tables,
+- journal/progress persistence contract,
+- Learning Player controls,
+- media Range response support.
 
 ## Data Layout
 
@@ -246,7 +524,7 @@ data/
         └── lesson-lesson_....json
 ```
 
-## Update from v0.3.0
+## Update from v0.4.0
 
 Back up data first:
 
@@ -254,7 +532,7 @@ Back up data first:
 cp -R data data-backup
 ```
 
-Replace project code with v0.4.0 but keep your existing `data/` directory.
+Replace project code with v0.5.0 but keep the existing `data/` directory.
 
 Then run:
 
@@ -262,20 +540,32 @@ Then run:
 ./start.sh
 ```
 
-Migration only adds new lesson tables. Existing media and transcript rows remain compatible.
+Migration only adds:
+
+```text
+journal_entries
+learning_progress
+```
+
+Existing sources, media, transcripts and lessons remain compatible.
 
 ## Next Phase
 
-Phase 6 will turn the generated lesson into the main learning experience:
+Phase 7 should focus on capture and retrieval rather than more AI:
 
 ```text
-Video player
-    +
-Timed transcript
-    +
-Click sentence to seek
-    +
-Sentence loop
-    +
-Meaning / Phrases / Journal tabs
+Chrome Extension
+    ↓
+Save current page URL + title + note
+    ↓
+Inbox
+```
+
+After that, the next product-quality backlog should include:
+
+```text
+Top-level Journal index
+Keyboard shortcuts
+Mobile layout refinement
+Spaced review scheduling
 ```

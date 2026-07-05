@@ -1,6 +1,6 @@
 {
   "name": "enjoy-journal",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "Local-first personal English listening and language journal.",
   "type": "module",
@@ -15,13 +15,14 @@
     "doctor": "bash scripts/doctor.sh",
     "runtime:check": "node scripts/check-runtime.js",
     "repair:native": "bash scripts/repair-native-deps.sh",
-    "check": "node --check app/server.js && node --check app/routes/inbox.routes.js && node --check app/services/inbox.service.js && node --check app/services/media.service.js && node --check app/services/pipeline.service.js && node --check app/services/transcription.service.js && node --check app/services/lesson.service.js && node --check public/js/api.js && node --check public/js/app.js && node --check scripts/check-runtime.js",
+    "check": "node --check app/server.js && node --check app/routes/inbox.routes.js && node --check app/routes/lessons.routes.js && node --check app/services/inbox.service.js && node --check app/services/media.service.js && node --check app/services/pipeline.service.js && node --check app/services/transcription.service.js && node --check app/services/lesson.service.js && node --check app/services/learning.service.js && node --check public/js/api.js && node --check public/js/app.js && node --check public/js/lesson-player.js && node --check scripts/check-runtime.js",
     "smoke:media": "bash scripts/smoke-media.sh",
     "setup:system": "bash scripts/install-system-deps.sh --yes",
     "setup:python": "bash scripts/setup-python.sh",
     "smoke:transcription": "bash scripts/smoke-transcription.sh",
     "model:download": ".venv/bin/python scripts/download-whisper-model.py",
-    "smoke:lesson": "bash scripts/smoke-lesson.sh"
+    "smoke:lesson": "bash scripts/smoke-lesson.sh",
+    "smoke:learning": "bash scripts/smoke-learning.sh"
   },
   "dependencies": {
     "better-sqlite3": "12.11.1",

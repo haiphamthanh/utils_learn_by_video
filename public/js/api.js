@@ -56,3 +56,32 @@ export function generateLesson(inboxId) {
 export function getLesson(inboxId) {
   return request(`/api/inbox/${inboxId}/lesson`);
 }
+
+export function listLessons({ q = "", status = "", limit = 100 } = {}) {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (status) params.set("status", status);
+  if (limit) params.set("limit", String(limit));
+  const query = params.toString();
+  return request(`/api/lessons${query ? `?${query}` : ""}`);
+}
+
+export function getLessonDetail(lessonId) {
+  return request(`/api/lessons/${lessonId}`);
+}
+
+export function updateLessonJournal(lessonId, payload) {
+  return request(`/api/lessons/${lessonId}/journal`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateLessonProgress(lessonId, action) {
+  return request(`/api/lessons/${lessonId}/progress`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action })
+  });
+}

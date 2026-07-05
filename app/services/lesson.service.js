@@ -239,6 +239,53 @@ function persistLesson({ inboxItemId, transcriptId, lessonId, outputPath, jobId 
     );
   }
 
+  const previousLesson = db.prepare(`
+    SELECT id
+    FROM lessons
+    WHERE inbox_item_id = ?
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).get(inboxItemId);
+
+  const previousJournal = previousLesson
+    ? db.prepare(`
+        SELECT entry_type AS entryType, content
+        FROM journal_entries
+        WHERE lesson_id = ?
+      `).all(previousLesson.id)
+    : [];
+
+  const previousProgress = previousLesson
+    ? db.prepare(`
+        SELECT
+          learning_status AS status,
+          listen_count AS listenCount,
+          shadow_count AS shadowCount,
+          last_opened_at AS lastOpenedAt,
+          last_completed_at AS lastCompletedAt
+        FROM learning_progress
+        WHERE lesson_id = ?
+      `).get(previousLesson.id)
+    : null;
+
+  const journalByType = new Map(previousJournal.map((entry) => [entry.entryType, entry.content]));
+  const artifactJournal = payload.journal || {};
+  const initialJournal = {
+    WHY_I_SAVED: journalByType.get("WHY_I_SAVED") ?? artifactJournal.whyISavedThis ?? "",
+    MY_THOUGHT: journalByType.get("MY_THOUGHT") ?? artifactJournal.myThought ?? "",
+    FAVORITE_PHRASE: journalByType.get("FAVORITE_PHRASE") ?? artifactJournal.favoritePhrase ?? "",
+    MY_EXAMPLE: journalByType.get("MY_EXAMPLE") ?? artifactJournal.myExample ?? ""
+  };
+
+  const artifactProgress = payload.progress || {};
+  const initialProgress = previousProgress || {
+    status: artifactProgress.status || "NEW",
+    listenCount: Number(artifactProgress.listenCount || 0),
+    shadowCount: Number(artifactProgress.shadowCount || 0),
+    lastOpenedAt: null,
+    lastCompletedAt: null
+  };
+
   const timestamp = nowIso();
   const transaction = db.transaction(() => {
     db.prepare(`
@@ -261,6 +308,37 @@ function persistLesson({ inboxItemId, transcriptId, lessonId, outputPath, jobId 
       timestamp
     );
 
+    const insertJournal = db.prepare(`
+      INSERT INTO journal_entries (
+        id, lesson_id, entry_type, content, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const [entryType, content] of Object.entries(initialJournal)) {
+      insertJournal.run(
+        makeId("journal"),
+        lessonId,
+        entryType,
+        String(content || ""),
+        timestamp,
+        timestamp
+      );
+    }
+
+    db.prepare(`
+      INSERT INTO learning_progress (
+        lesson_id, learning_status, listen_count, shadow_count,
+        last_opened_at, last_completed_at
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      lessonId,
+      initialProgress.status,
+      initialProgress.listenCount,
+      initialProgress.shadowCount,
+      initialProgress.lastOpenedAt,
+      initialProgress.lastCompletedAt
+    );
+
     db.prepare(`
       UPDATE lesson_generation_jobs
       SET status = 'COMPLETED', stage = 'COMPLETE', progress = 100,
@@ -276,6 +354,15 @@ function persistLesson({ inboxItemId, transcriptId, lessonId, outputPath, jobId 
   });
 
   transaction();
+
+  payload.journal = {
+    whyISavedThis: initialJournal.WHY_I_SAVED,
+    myThought: initialJournal.MY_THOUGHT,
+    favoritePhrase: initialJournal.FAVORITE_PHRASE,
+    myExample: initialJournal.MY_EXAMPLE
+  };
+  payload.progress = initialProgress;
+  fs.writeFileSync(outputPath, JSON.stringify(payload, null, 2), "utf-8");
 }
 
 async function runLessonJob({

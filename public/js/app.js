@@ -4,11 +4,13 @@ import {
   getLesson,
   getTranscript,
   listInbox,
+  listLessons,
   processMedia,
   transcribeMedia,
   updateTranscriptSegment,
   uploadMedia
 } from "./api.js";
+import { createLessonPlayer } from "./lesson-player.js";
 
 const pages = [...document.querySelectorAll(".page")];
 const navLinks = [...document.querySelectorAll(".nav-link")];
@@ -19,11 +21,26 @@ const inboxList = document.querySelector("#inbox-list");
 const inboxCount = document.querySelector("#inbox-count");
 const inboxTemplate = document.querySelector("#inbox-card-template");
 const statusFilters = [...document.querySelectorAll("[data-status-filter]")];
+const todayLessons = document.querySelector("#today-lessons");
+const libraryLessons = document.querySelector("#library-lessons");
+const librarySearch = document.querySelector("#library-search");
+const libraryStatusFilters = [...document.querySelectorAll("[data-library-status]")];
+const lessonPlayerRoot = document.querySelector("#lesson-player-root");
 
 let currentStatusFilter = "";
+let currentLibraryStatus = "";
 let activePollTimer = null;
+let librarySearchTimer = null;
+let returnPageAfterLesson = "library";
+
+const lessonPlayer = createLessonPlayer({
+  root: lessonPlayerRoot,
+  onClose: () => showPage(returnPageAfterLesson)
+});
 
 function showPage(pageName) {
+  if (pageName !== "lesson") lessonPlayer.reset();
+
   pages.forEach((page) => {
     page.hidden = page.id !== `${pageName}-page`;
   });
@@ -32,7 +49,28 @@ function showPage(pageName) {
     link.classList.toggle("is-active", link.dataset.page === pageName);
   });
 
+  if (pageName === "today") void refreshToday();
   if (pageName === "inbox") void refreshInbox();
+  if (pageName === "library") void refreshLibrary();
+}
+
+async function openLesson(lessonId, returnPage = "library") {
+  returnPageAfterLesson = returnPage;
+  showPage("lesson");
+  try {
+    await lessonPlayer.open(lessonId);
+  } catch (error) {
+    lessonPlayerRoot.innerHTML = `
+      <div class="empty-card">
+        <h3>Lesson could not be opened</h3>
+        <p>${escapeHtml(error.message)}</p>
+        <button class="secondary-action" type="button" data-lesson-error-back>Back</button>
+      </div>
+    `;
+    lessonPlayerRoot.querySelector("[data-lesson-error-back]")?.addEventListener("click", () => {
+      showPage(returnPageAfterLesson);
+    });
+  }
 }
 
 function sourceName(type) {
@@ -250,6 +288,117 @@ async function loadLessonPreview(item, details, content) {
   }
 }
 
+
+function durationLabel(milliseconds) {
+  if (!milliseconds) return "Short lesson";
+  const seconds = Math.max(1, Math.round(milliseconds / 1000));
+  if (seconds < 60) return `${seconds} sec`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return rest ? `${minutes}m ${rest}s` : `${minutes} min`;
+}
+
+function lessonCardMarkup(item) {
+  const poster = item.media?.posterUrl
+    ? `<img src="${escapeHtml(item.media.posterUrl)}" alt="" loading="lazy" />`
+    : '<div class="lesson-card-poster-placeholder">EJ</div>';
+
+  return `
+    <article class="lesson-card" data-lesson-id="${escapeHtml(item.id)}">
+      <button class="lesson-card-open" type="button" aria-label="Open ${escapeHtml(item.title)}">
+        <div class="lesson-card-poster">${poster}</div>
+        <div class="lesson-card-body">
+          <div class="lesson-card-meta">
+            <span>${escapeHtml(item.learningStatus || "NEW")}</span>
+            <span>${escapeHtml(durationLabel(item.durationMs))}</span>
+          </div>
+          <h3>${escapeHtml(item.title)}</h3>
+          <p>${escapeHtml(item.summaryVi || "A small moment ready for listening practice.")}</p>
+          <div class="lesson-card-footer">
+            <span>${escapeHtml(item.difficulty || "UNRATED")}</span>
+            <span>${item.listenCount || 0} listens · ${item.shadowCount || 0} loops</span>
+          </div>
+        </div>
+      </button>
+    </article>
+  `;
+}
+
+function bindLessonCards(container, returnPage) {
+  for (const card of container.querySelectorAll("[data-lesson-id]")) {
+    card.querySelector(".lesson-card-open")?.addEventListener("click", () => {
+      void openLesson(card.dataset.lessonId, returnPage);
+    });
+  }
+}
+
+async function refreshToday() {
+  if (!todayLessons) return;
+  todayLessons.innerHTML = '<div class="empty-card"><p>Loading today…</p></div>';
+
+  try {
+    const newLessons = await listLessons({ status: "NEW", limit: 5 });
+    const learningLessons = newLessons.length < 5
+      ? await listLessons({ status: "LEARNING", limit: 5 - newLessons.length })
+      : [];
+    const lessons = [...newLessons, ...learningLessons];
+    if (!lessons.length) {
+      todayLessons.innerHTML = `
+        <div class="empty-card">
+          <span class="empty-icon">◎</span>
+          <h3>Start with one meaningful video</h3>
+          <p>Complete one item in Inbox and your next listening moment will appear here.</p>
+        </div>
+      `;
+      return;
+    }
+
+    todayLessons.innerHTML = lessons.map(lessonCardMarkup).join("");
+    bindLessonCards(todayLessons, "today");
+  } catch (error) {
+    todayLessons.innerHTML = `
+      <div class="empty-card">
+        <h3>Today could not be loaded</h3>
+        <p>${escapeHtml(error.message)}</p>
+      </div>
+    `;
+  }
+}
+
+async function refreshLibrary() {
+  if (!libraryLessons) return;
+  libraryLessons.innerHTML = '<div class="empty-card"><p>Searching your library…</p></div>';
+
+  try {
+    const lessons = await listLessons({
+      q: librarySearch?.value || "",
+      status: currentLibraryStatus,
+      limit: 200
+    });
+
+    if (!lessons.length) {
+      libraryLessons.innerHTML = `
+        <div class="empty-card">
+          <span class="empty-icon">◎</span>
+          <h3>No lessons found</h3>
+          <p>Try another search or complete a lesson from Inbox.</p>
+        </div>
+      `;
+      return;
+    }
+
+    libraryLessons.innerHTML = lessons.map(lessonCardMarkup).join("");
+    bindLessonCards(libraryLessons, "library");
+  } catch (error) {
+    libraryLessons.innerHTML = `
+      <div class="empty-card">
+        <h3>Library could not be loaded</h3>
+        <p>${escapeHtml(error.message)}</p>
+      </div>
+    `;
+  }
+}
+
 async function refreshInbox({ quiet = false } = {}) {
   if (!quiet) {
     inboxList.innerHTML = `<div class="empty-card"><p>Loading Inbox…</p></div>`;
@@ -292,6 +441,7 @@ async function refreshInbox({ quiet = false } = {}) {
       const processAction = fragment.querySelector(".process-action");
       const transcribeAction = fragment.querySelector(".transcribe-action");
       const generateLessonAction = fragment.querySelector(".generate-lesson-action");
+      const openLessonAction = fragment.querySelector(".open-lesson-action");
       const processingDetail = fragment.querySelector(".processing-detail");
       const processingLabel = fragment.querySelector(".processing-label");
       const progressBar = fragment.querySelector(".progress-bar");
@@ -322,6 +472,7 @@ async function refreshInbox({ quiet = false } = {}) {
         processAction.hidden = true;
         transcribeAction.hidden = true;
         generateLessonAction.hidden = true;
+        openLessonAction.hidden = true;
       }
 
       setProgress(item, processingDetail, processingLabel, progressBar);
@@ -372,6 +523,7 @@ async function refreshInbox({ quiet = false } = {}) {
       }
 
       if (item.lessonId && item.status === "LESSON_READY") {
+        openLessonAction.hidden = false;
         void loadLessonPreview(item, lessonPreview, lessonContent);
       }
 
@@ -429,6 +581,10 @@ async function refreshInbox({ quiet = false } = {}) {
         }
       });
 
+      openLessonAction.addEventListener("click", () => {
+        if (item.lessonId) void openLesson(item.lessonId, "inbox");
+      });
+
       inboxList.append(fragment);
     }
   } catch (error) {
@@ -467,6 +623,23 @@ for (const filter of statusFilters) {
   });
 }
 
+for (const filter of libraryStatusFilters) {
+  filter.addEventListener("click", async () => {
+    currentLibraryStatus = filter.dataset.libraryStatus;
+    libraryStatusFilters.forEach((item) => {
+      item.classList.toggle("is-active", item === filter);
+    });
+    await refreshLibrary();
+  });
+}
+
+librarySearch?.addEventListener("input", () => {
+  if (librarySearchTimer) window.clearTimeout(librarySearchTimer);
+  librarySearchTimer = window.setTimeout(() => {
+    void refreshLibrary();
+  }, 250);
+});
+
 captureForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
@@ -498,3 +671,4 @@ captureForm.addEventListener("submit", async (event) => {
 });
 
 void refreshInbox();
+void refreshToday();

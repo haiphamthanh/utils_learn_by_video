@@ -47,14 +47,7 @@
         <div class="today-panel">
           <p class="eyebrow">Today</p>
           <h2>Your next small moments</h2>
-          <div class="empty-card">
-            <span class="empty-icon">◎</span>
-            <h3>Start with one meaningful video</h3>
-            <p>
-              Save a source to Inbox, attach media, and Enjoy Journal will prepare
-              it for learning.
-            </p>
-          </div>
+          <div id="today-lessons" class="lesson-card-grid" aria-live="polite"></div>
         </div>
       </section>
 
@@ -111,14 +104,27 @@
       </section>
 
       <section id="library-page" class="page" hidden>
-        <div class="placeholder-page">
-          <p class="eyebrow">Coming after the first learning loop</p>
-          <h1>Library</h1>
-          <p>
-            Processed lessons will live here. The MVP first completes capture,
-            persistence and media attachment.
-          </p>
+        <div class="section-heading library-heading">
+          <div>
+            <p class="eyebrow">Everything worth returning to</p>
+            <h1>Library</h1>
+          </div>
+          <label class="library-search">
+            <span class="sr-only">Search lessons</span>
+            <input id="library-search" type="search" placeholder="Search title, transcript, phrase or journal…" />
+          </label>
         </div>
+        <div class="filter-row">
+          <button class="filter-chip is-active" data-library-status="">All</button>
+          <button class="filter-chip" data-library-status="NEW">New</button>
+          <button class="filter-chip" data-library-status="LEARNING">Learning</button>
+          <button class="filter-chip" data-library-status="MASTERED">Mastered</button>
+        </div>
+        <div id="library-lessons" class="lesson-card-grid" aria-live="polite"></div>
+      </section>
+
+      <section id="lesson-page" class="page" hidden>
+        <div id="lesson-player-root"></div>
       </section>
 
       <section id="journal-page" class="page" hidden>
@@ -224,6 +230,9 @@
           </button>
           <button class="generate-lesson-action" type="button" hidden>
             Generate lesson
+          </button>
+          <button class="open-lesson-action" type="button" hidden>
+            Open lesson
           </button>
         </div>
         <details class="transcript-preview" hidden>

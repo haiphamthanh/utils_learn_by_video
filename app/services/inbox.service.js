@@ -216,6 +216,15 @@ export function attachMedia(inboxItemId, uploadedFile) {
   const createdAt = nowIso();
 
   const transaction = db.transaction(() => {
+    const lessonIds = db.prepare("SELECT id FROM lessons WHERE inbox_item_id = ?")
+      .all(inboxItemId)
+      .map((row) => row.id);
+
+    for (const lessonId of lessonIds) {
+      db.prepare("DELETE FROM journal_entries WHERE lesson_id = ?").run(lessonId);
+      db.prepare("DELETE FROM learning_progress WHERE lesson_id = ?").run(lessonId);
+    }
+
     db.prepare("DELETE FROM lesson_generation_jobs WHERE inbox_item_id = ?").run(inboxItemId);
     db.prepare("DELETE FROM lessons WHERE inbox_item_id = ?").run(inboxItemId);
     db.prepare("DELETE FROM transcription_jobs WHERE inbox_item_id = ?").run(inboxItemId);
