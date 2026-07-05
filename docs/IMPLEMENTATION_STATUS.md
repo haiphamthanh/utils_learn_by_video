@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 6 — Learning Player
+Phase 7 — Chrome Extension Capture
 
 ## Completed
 
@@ -13,49 +13,53 @@ Phase 6 — Learning Player
 - [x] Local Whisper transcription
 - [x] Optional OpenAI transcription provider
 - [x] Timed transcript persistence
-- [x] Automatic basic transcript cleaning
-- [x] Per-segment reviewed transcript editing
-- [x] Raw/cleaned/reviewed layer preservation
+- [x] Raw / cleaned / reviewed transcript layers
 - [x] Offline and OpenAI lesson providers
-- [x] Canonical versioned `lesson.json`
+- [x] Versioned `lesson.json` artifacts
 - [x] Today lesson queue
 - [x] Searchable Library
 - [x] Dedicated Learning Player
-- [x] Video/audio byte-range streaming
-- [x] Timed transcript synchronization
-- [x] Click sentence to seek
-- [x] Active sentence highlighting
-- [x] Previous/next sentence navigation
-- [x] Sentence Loop ×3
-- [x] Playback speed controls
-- [x] Meaning tab
-- [x] Phrases and patterns tab
-- [x] Per-lesson Journal editing
-- [x] Journal SQLite persistence
-- [x] NEW / LEARNING / MASTERED progress
-- [x] Listen and shadow counters
-- [x] Journal/progress synchronization into lesson artifact
-- [x] Journal/progress copy-forward on lesson regeneration
-- [x] v0.4.0 → v0.5.0 migration compatibility test
-- [x] Media, transcription, lesson and learning smoke tests
+- [x] Timed transcript synchronization and sentence seek
+- [x] Sentence Loop ×3 and playback speed controls
+- [x] Meaning, phrases and lesson-centric Journal
+- [x] Learning progress persistence
+- [x] Manifest V3 Chrome Extension
+- [x] Explicit-click page metadata capture
+- [x] Facebook Reel detection and URL normalization
+- [x] YouTube Short detection and URL normalization
+- [x] Personal note capture in extension popup
+- [x] Service-worker API submission
+- [x] Connected / Offline server state
+- [x] Configurable localhost server port
+- [x] Open Inbox action after save
+- [x] Extension package command
+- [x] Extension smoke test
+- [x] Existing media/transcription/lesson/learning smoke tests preserved
 
 ## In Progress
 
-- [ ] End-to-end verification with a real user video and local Whisper on the user's Mac
-- [ ] End-to-end usability feedback for sentence loop timing
+- [ ] End-to-end extension verification in Chrome on the user's Mac
+- [ ] End-to-end verification with a real local Whisper transcript
+- [ ] Usability feedback for popup wording and sentence-loop timing
 
 ## Not Started
 
-- [ ] Chrome Extension capture
 - [ ] Top-level Journal index
 - [ ] Keyboard shortcuts
 - [ ] Mobile interaction refinement
 - [ ] Spaced review scheduling
+- [ ] Optional private remote access
 
 ## Current Flow
 
 ```text
-Save URL
+Interesting Reel / Short
+  ↓
+Click extension
+  ↓
+Save URL + title + note
+  ↓
+Inbox
   ↓
 Attach media
   ↓
@@ -69,104 +73,79 @@ Generate lesson
   ↓
 Open Today / Library
   ↓
-Open lesson
-  ↓
 Listen + Seek + Loop
   ↓
-Meaning + Phrases
+Meaning + Phrases + Journal
+```
+
+## Extension Architecture
+
+```text
+Toolbar click
   ↓
-Journal
-```
-
-## Learning Surface Contract
-
-```text
-Media
-  +
-Timed transcript
-  +
-Meaning by segment
-  +
-Reusable phrases
-  +
-Personal journal
-  +
-Progress
-```
-
-## Data Preservation Rules
-
-| Layer | Can change? | Rule |
-|---|---:|---|
-| Original media | No | User-provided source is preserved |
-| Raw transcript | No | Never overwritten by cleaning or review |
-| Cleaned transcript | Yes, generated | Basic formatting layer |
-| Reviewed transcript | Yes, user action | Only explicit corrections |
-| Lesson artifact | Versioned | Regeneration creates another JSON file |
-| Journal | Yes, user action | Stored in DB and synchronized to artifact |
-| Learning progress | Yes | Stored in DB and synchronized to artifact |
-
-## Today Selection
-
-```text
-NEW
+activeTab permission
   ↓
-LEARNING
+Read page title + canonical URL once
+  ↓
+Popup note
+  ↓
+Service worker
+  ↓
+POST /api/inbox
 ```
 
-Limit:
+No persistent page observer is installed.
+
+## Extension Permissions
+
+| Permission | Purpose |
+|---|---|
+| `activeTab` | Temporary access after an explicit toolbar click |
+| `scripting` | Read current page title and canonical URL |
+| `storage` | Remember local server URL |
+| localhost host permissions | Send capture to Enjoy Journal |
+
+## Security Boundaries
+
+The Phase 7 extension does not:
+
+- download social-media video,
+- crawl feeds,
+- collect comments,
+- monitor browsing continuously,
+- execute remotely hosted JavaScript,
+- connect to arbitrary remote servers.
+
+## Acceptance Criteria
 
 ```text
-5 lessons
+Enjoy Journal server running
+    ↓
+Open Facebook Reel
+    ↓
+Click extension
+    ↓
+Popup identifies Facebook Reel
+    ↓
+Add note
+    ↓
+Save to Inbox
+    ↓
+Success state appears
+    ↓
+Open Inbox
+    ↓
+Saved item exists with URL + title + note
 ```
 
-MASTERED lessons are excluded from Today.
-
-## Library Search Coverage
-
-- title
-- Vietnamese summary
-- topic
-- effective transcript text
-- generated key phrases and patterns
-- journal content
+The same capture path must also work for a YouTube Short and a generic HTTPS page.
 
 ## Known Constraints
 
 | Constraint | Impact | Handling |
 |---|---|---|
-| Local-basic meaning may be empty | Meaning tab can be empty | Use OpenAI lesson provider |
-| Loop timing is fixed at 900 ms | Pause may not suit every sentence | Make timing configurable later |
-| Native browser media controls remain visible | UI is less custom | Keeps MVP reliable and accessible |
-| Top-level Journal is still a placeholder | Journal is currently lesson-centric | Build Journal index after Extension |
-| Search uses SQLite `LIKE` | Not optimized for huge libraries | Sufficient for personal MVP |
-
-## Phase 6 Acceptance Criteria
-
-```text
-LESSON_READY
-    ↓
-Open lesson
-    ↓
-Video or audio loads
-    ↓
-Click transcript sentence
-    ↓
-Media seeks correctly
-    ↓
-Current sentence highlights
-    ↓
-Loop ×3 completes
-    ↓
-Shadow count increments
-    ↓
-Save journal note
-    ↓
-Refresh
-    ↓
-Journal and progress remain
-    ↓
-Search phrase/journal in Library
-    ↓
-Original lesson is found
-```
+| Extension is loaded unpacked | Manual install after code update | Chrome Developer mode |
+| MVP server is local-only | No capture to remote server yet | Intentional privacy boundary |
+| Page title quality depends on source metadata | Some social pages may have generic titles | URL and personal note remain primary |
+| Extension does not acquire media | User still attaches media manually | Preserve legal/architectural separation |
+| Top-level Journal is still a placeholder | Reflection remains lesson-centric | Build in Phase 8 |

@@ -38,7 +38,7 @@ const lessonPlayer = createLessonPlayer({
   onClose: () => showPage(returnPageAfterLesson)
 });
 
-function showPage(pageName) {
+function showPage(pageName, { updateUrl = true } = {}) {
   if (pageName !== "lesson") lessonPlayer.reset();
 
   pages.forEach((page) => {
@@ -48,6 +48,11 @@ function showPage(pageName) {
   navLinks.forEach((link) => {
     link.classList.toggle("is-active", link.dataset.page === pageName);
   });
+
+  if (updateUrl && pageName !== "lesson") {
+    const url = pageName === "today" ? "/" : `/?page=${encodeURIComponent(pageName)}`;
+    window.history.replaceState({}, "", url);
+  }
 
   if (pageName === "today") void refreshToday();
   if (pageName === "inbox") void refreshInbox();
@@ -670,5 +675,6 @@ captureForm.addEventListener("submit", async (event) => {
   }
 });
 
-void refreshInbox();
-void refreshToday();
+const initialPage = new URLSearchParams(window.location.search).get("page");
+const supportedInitialPages = new Set(["today", "inbox", "library", "journal"]);
+showPage(supportedInitialPages.has(initialPage) ? initialPage : "today", { updateUrl: false });

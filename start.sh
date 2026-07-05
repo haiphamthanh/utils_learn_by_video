@@ -125,6 +125,7 @@ run_yarn migrate
 
 echo
 echo "Open http://localhost:${PORT:-3000}"
+echo "Chrome extension: chrome://extensions → Load unpacked → ${PROJECT_DIR}/extension"
 echo
 
 run_yarn start

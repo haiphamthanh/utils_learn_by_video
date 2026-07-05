@@ -6,10 +6,14 @@ A local-first application for saving meaningful short videos and turning them in
 
 ## Current Version
 
-**v0.5.0 — Phase 6 Learning Player**
+**v0.6.0 — Phase 7 Chrome Extension Capture**
 
 ```text
-Save source URL
+Click browser extension
+    ↓
+Save current URL + title + note
+    ↓
+Inbox
     ↓
 Attach local media
     ↓
@@ -52,7 +56,7 @@ Listen · Seek · Loop · Understand · Journal
 | Phrases and patterns tab | Done |
 | Per-lesson Journal editing | Done |
 | Learning progress persistence | Done |
-| Chrome Extension | Later |
+| Chrome Extension capture | Done |
 
 ## Quick Start
 
@@ -92,10 +96,16 @@ starts Enjoy Journal
 ```text
 Interesting Reel / Short
         ↓
-Save URL + note
+Click Enjoy Journal extension
         ↓
-Inbox
+Review URL + title
+        ↓
+Add why it matters
+        ↓
+Save to Inbox
 ```
+
+The web app still supports manual source capture as a fallback.
 
 ### 2. Prepare
 
@@ -138,6 +148,85 @@ Read meaning / phrase
         ↓
 Write personal example
 ```
+
+## Chrome Extension Capture
+
+The Phase 7 extension closes the missing first step of the workflow.
+
+```text
+Current browser tab
+        ↓ explicit click
+activeTab + scripting
+        ↓
+Popup
+        ↓
+Manifest V3 service worker
+        ↓ local HTTP
+Enjoy Journal API
+        ↓
+Inbox
+```
+
+The extension intentionally does not download media, crawl feeds, collect comments, or run a persistent content script.
+
+### Install
+
+Start Enjoy Journal first:
+
+```bash
+./start.sh
+```
+
+Then open:
+
+```text
+chrome://extensions
+```
+
+Enable Developer mode, choose **Load unpacked**, and select:
+
+```text
+<project>/extension
+```
+
+Pin **Enjoy Journal Capture** to the Chrome toolbar.
+
+### Use
+
+```text
+Open Facebook Reel / YouTube Short / useful page
+        ↓
+Click extension icon
+        ↓
+Add a short note
+        ↓
+Save to Inbox
+        ↓
+Open Inbox later and attach media
+```
+
+### Connection
+
+Default local server:
+
+```text
+http://localhost:3000
+```
+
+The popup can save a different localhost port. The MVP intentionally rejects arbitrary remote server URLs.
+
+### Source cleanup
+
+The extension normalizes known short-video URLs before saving. For example, tracking parameters are removed from Facebook Reel and YouTube Short URLs. Recognized current Reel/Short URLs take precedence over a generic page canonical URL.
+
+### Extension commands
+
+```bash
+yarn smoke:extension
+yarn extension:package
+```
+
+More detail: `docs/CHROME_EXTENSION.md`.
 
 ## Learning Player
 
@@ -498,14 +587,20 @@ yarn smoke:media
 yarn smoke:transcription
 yarn smoke:lesson
 yarn smoke:learning
+yarn smoke:extension
 ```
 
-`smoke:learning` verifies:
+`smoke:learning` verifies the journal/progress and Learning Player contracts.
 
-- new SQLite tables,
-- journal/progress persistence contract,
-- Learning Player controls,
-- media Range response support.
+`smoke:extension` verifies:
+
+- Manifest V3 structure,
+- minimum permissions,
+- local host permissions,
+- extension JavaScript syntax,
+- Facebook Reel URL normalization,
+- YouTube Short URL normalization,
+- local-only API safety.
 
 ## Data Layout
 
@@ -524,7 +619,7 @@ data/
         └── lesson-lesson_....json
 ```
 
-## Update from v0.4.0
+## Update from v0.5.0
 
 Back up data first:
 
@@ -532,7 +627,7 @@ Back up data first:
 cp -R data data-backup
 ```
 
-Replace project code with v0.5.0 but keep the existing `data/` directory.
+Replace project code with v0.6.0 but keep the existing `data/` directory.
 
 Then run:
 
@@ -540,32 +635,27 @@ Then run:
 ./start.sh
 ```
 
-Migration only adds:
-
-```text
-journal_entries
-learning_progress
-```
-
-Existing sources, media, transcripts and lessons remain compatible.
+Phase 7 does not require a database migration. Existing sources, media, transcripts, lessons, journal entries and learning progress remain compatible.
 
 ## Next Phase
 
-Phase 7 should focus on capture and retrieval rather than more AI:
-
-```text
-Chrome Extension
-    ↓
-Save current page URL + title + note
-    ↓
-Inbox
-```
-
-After that, the next product-quality backlog should include:
+Phase 8 should complete retrieval and reflection before adding more AI:
 
 ```text
 Top-level Journal index
+        ↓
+Browse saved thoughts and phrases
+        ↓
+Search journal content
+        ↓
+Jump back to original lesson sentence
+```
+
+Then continue with:
+
+```text
 Keyboard shortcuts
-Mobile layout refinement
+Mobile interaction refinement
 Spaced review scheduling
+Optional cloud/private remote access
 ```

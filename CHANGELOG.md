@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.6.0 — Phase 7 Chrome Extension Capture
+
+### Added
+
+- Manifest V3 Chrome Extension in `extension/`.
+- Explicit-click current-page capture using `activeTab`.
+- One-time metadata extraction using `chrome.scripting`.
+- Background service worker for local API requests.
+- Popup UI for source review and personal note capture.
+- Connected / Offline health indicator.
+- Local Enjoy Journal URL settings.
+- Facebook Reel source detection and URL normalization.
+- YouTube Short source detection and URL normalization.
+- Tracking-parameter cleanup for saved source URLs.
+- Success state with direct **Open Inbox** action.
+- Extension toolbar success badge.
+- `docs/CHROME_EXTENSION.md`.
+- `yarn smoke:extension`.
+- `yarn extension:package`.
+- `?page=inbox` web-app entry support.
+
+### Changed
+
+- Project version upgraded from `0.5.0` to `0.6.0`.
+- `start.sh` now prints the exact unpacked-extension directory.
+- Web navigation stores non-lesson page state in the URL.
+- Capture workflow now starts from the browser toolbar instead of requiring the web app to be opened first.
+
+### Security
+
+- No persistent content script is used.
+- Page access is temporary and begins only after an explicit extension click.
+- The MVP extension only accepts local Enjoy Journal server URLs.
+- No remote JavaScript is loaded.
+
+### Preserved
+
+- Existing v0.5.0 database and `data/` contents require no migration.
+- Manual web-app capture remains available.
+- Media, transcription, lesson and learning flows are unchanged.
+
 ## 0.5.0 — Phase 6 Learning Player
 
 ### Added

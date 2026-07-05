@@ -1,0 +1,298 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #22211f;
+  background: #f6f2ea;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 380px;
+  min-height: 510px;
+  margin: 0;
+  background: #f6f2ea;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.popup-shell {
+  padding: 18px;
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-mark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 50%;
+  background: #1f5b49;
+  color: white;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.brand div {
+  display: grid;
+  gap: 2px;
+}
+
+.brand strong {
+  font-size: 14px;
+}
+
+.brand span:last-child {
+  color: #6f6a61;
+  font-size: 12px;
+}
+
+.connection-status {
+  flex: none;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.connection-status.is-checking {
+  background: #ece6dc;
+  color: #6f6a61;
+}
+
+.connection-status.is-online {
+  background: #dcece5;
+  color: #174637;
+}
+
+.connection-status.is-offline {
+  background: #f5dddd;
+  color: #7a2424;
+}
+
+.source-card {
+  padding: 18px;
+  border: 1px solid #ddd6ca;
+  border-radius: 16px;
+  background: #fffdf8;
+}
+
+.source-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.source-type,
+.page-state {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.source-type {
+  color: #1f5b49;
+}
+
+.page-state {
+  color: #8b8378;
+}
+
+.source-card h1 {
+  margin: 12px 0 8px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 23px;
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+.source-url {
+  max-height: 44px;
+  margin: 0;
+  overflow: hidden;
+  color: #6f6a61;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.field > span {
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.field textarea,
+.field input {
+  width: 100%;
+  border: 1px solid #ddd6ca;
+  border-radius: 12px;
+  padding: 11px 12px;
+  background: white;
+  color: #22211f;
+  outline: none;
+}
+
+.field textarea {
+  resize: vertical;
+  min-height: 94px;
+}
+
+.field textarea:focus,
+.field input:focus {
+  border-color: #1f5b49;
+  box-shadow: 0 0 0 3px rgb(31 91 73 / 12%);
+}
+
+.primary-action,
+.secondary-action {
+  width: 100%;
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 16px;
+  font-weight: 800;
+}
+
+.primary-action {
+  margin-top: 16px;
+  background: #1f5b49;
+  color: white;
+}
+
+.primary-action:hover:not(:disabled) {
+  background: #174637;
+}
+
+.primary-action:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.secondary-action {
+  background: #fffdf8;
+  color: #22211f;
+}
+
+.message {
+  margin: 12px 0 0;
+  padding: 9px 11px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.message.is-error {
+  background: #f5dddd;
+  color: #7a2424;
+}
+
+.message.is-success {
+  background: #dcece5;
+  color: #174637;
+}
+
+.saved-state {
+  padding: 28px 10px 18px;
+  text-align: center;
+}
+
+.saved-mark {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  margin: 0 auto 14px;
+  place-items: center;
+  border-radius: 50%;
+  background: #dcece5;
+  color: #174637;
+  font-size: 26px;
+  font-weight: 900;
+}
+
+.saved-state h2 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 30px;
+  font-weight: 500;
+}
+
+.saved-state p {
+  margin: 10px auto 18px;
+  color: #6f6a61;
+  line-height: 1.55;
+}
+
+.saved-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-panel {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #ddd6ca;
+  color: #6f6a61;
+}
+
+.settings-panel summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.field.compact {
+  margin-top: 12px;
+}
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 9px;
+}
+
+.text-action {
+  border: 0;
+  padding: 4px 0;
+  background: transparent;
+  color: #1f5b49;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.settings-help {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+}

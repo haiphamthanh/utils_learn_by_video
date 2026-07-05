@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Enjoy Journal Capture</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup-shell">
+      <header class="popup-header">
+        <div class="brand">
+          <span class="brand-mark">EJ</span>
+          <div>
+            <strong>Enjoy Journal</strong>
+            <span>Save this moment</span>
+          </div>
+        </div>
+        <span id="connection-status" class="connection-status is-checking">Checking…</span>
+      </header>
+
+      <form id="capture-form">
+        <section class="source-card" aria-live="polite">
+          <div class="source-meta">
+            <span id="source-type" class="source-type">Web page</span>
+            <span id="page-state" class="page-state"></span>
+          </div>
+          <h1 id="source-title">Reading current page…</h1>
+          <p id="source-url" class="source-url"></p>
+        </section>
+
+        <label class="field">
+          <span>Why are you saving this?</span>
+          <textarea
+            id="personal-note"
+            rows="4"
+            maxlength="4000"
+            placeholder="Useful phrase, interesting idea, something worth hearing again…"
+          ></textarea>
+        </label>
+
+        <p id="message" class="message" hidden></p>
+
+        <button id="save-button" class="primary-action" type="submit" disabled>
+          Save to Inbox
+        </button>
+      </form>
+
+      <section id="saved-state" class="saved-state" hidden>
+        <div class="saved-mark">✓</div>
+        <h2>Saved to Inbox</h2>
+        <p>The source is safe. Add media later when you are ready to learn.</p>
+        <div class="saved-actions">
+          <button id="open-inbox-button" class="primary-action" type="button">Open Inbox</button>
+          <button id="save-another-button" class="secondary-action" type="button">Save another note</button>
+        </div>
+      </section>
+
+      <details class="settings-panel">
+        <summary>Connection settings</summary>
+        <label class="field compact">
+          <span>Enjoy Journal URL</span>
+          <input id="api-base-url" type="url" value="http://localhost:3000" />
+        </label>
+        <div class="settings-actions">
+          <button id="test-connection-button" class="text-action" type="button">Test</button>
+          <button id="save-settings-button" class="text-action" type="button">Save</button>
+        </div>
+        <p class="settings-help">MVP supports localhost and 127.0.0.1 only.</p>
+      </details>
+    </main>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
