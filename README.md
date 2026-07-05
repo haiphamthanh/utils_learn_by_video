@@ -6,7 +6,7 @@ A local-first application for saving meaningful short videos and turning them in
 
 ## Current Version
 
-**v0.7.0 — Automatic URL-to-Lesson Pipeline**
+**v0.7.1 — Automatic URL-to-Lesson Pipeline**
 
 ```text
 Click browser extension
@@ -670,3 +670,31 @@ Mobile interaction refinement
 Spaced review scheduling
 Optional cloud/private remote access
 ```
+
+
+## Python environment self-repair
+
+`./start.sh` now verifies that `.venv` contains a working `pip` before installing AI dependencies. If the environment exists but `pip` is missing, setup will:
+
+```text
+Detect missing pip
+    ↓
+python -m ensurepip
+    ↓
+Still broken?
+    ↓
+Recreate .venv
+    ↓
+Verify pip
+    ↓
+Install AI dependencies
+```
+
+Manual repair is also available:
+
+```bash
+yarn repair:python
+```
+
+This only removes `.venv`; it does not touch `data/`, SQLite, media, transcripts or lessons.
+

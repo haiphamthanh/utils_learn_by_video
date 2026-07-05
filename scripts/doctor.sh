@@ -80,7 +80,7 @@ PY
     printf "✓ Python AI + URL acquisition environment\n"
   else
     printf "✗ Python AI + URL acquisition environment\n"
-    printf "  Repair with: yarn setup:python\n"
+    printf "  Repair with: yarn repair:python\n"
     failures=$((failures + 1))
   fi
 else

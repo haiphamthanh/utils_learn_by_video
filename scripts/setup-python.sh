@@ -4,6 +4,11 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_DIR"
 
+BOOTSTRAP_ONLY=0
+if [ "${1:-}" = "--bootstrap-only" ]; then
+  BOOTSTRAP_ONLY=1
+fi
+
 resolve_python() {
   local candidate="$1"
 
@@ -72,6 +77,52 @@ install_python_311_macos() {
   brew install python@3.11
 }
 
+create_venv() {
+  echo "Creating Python virtual environment..."
+  rm -rf .venv
+  "$PYTHON_BIN" -m venv .venv
+}
+
+venv_has_pip() {
+  [ -x .venv/bin/python ] && .venv/bin/python -m pip --version >/dev/null 2>&1
+}
+
+bootstrap_pip() {
+  if venv_has_pip; then
+    return 0
+  fi
+
+  echo "Python virtual environment exists but pip is missing."
+  echo "Bootstrapping pip with ensurepip..."
+
+  if .venv/bin/python -m ensurepip --upgrade --default-pip >/dev/null 2>&1 && venv_has_pip; then
+    echo "pip restored successfully."
+    return 0
+  fi
+
+  echo "Could not restore pip in the existing virtual environment."
+  echo "Recreating .venv with $PYTHON_BIN..."
+  create_venv
+
+  if ! venv_has_pip; then
+    echo "pip is still missing after recreating .venv; retrying ensurepip..."
+    .venv/bin/python -m ensurepip --upgrade --default-pip
+  fi
+
+  if ! venv_has_pip; then
+    echo
+    echo "Could not install pip into the Python virtual environment."
+    echo "Selected Python: $PYTHON_BIN"
+    echo "Try:"
+    echo "  rm -rf .venv"
+    echo "  $PYTHON_BIN -m ensurepip --upgrade"
+    echo "  ./start.sh"
+    exit 1
+  fi
+
+  echo "Python virtual environment repaired successfully."
+}
+
 PYTHON_BIN="$(find_python || true)"
 
 if [ -z "$PYTHON_BIN" ] && [ "$(uname -s)" = "Darwin" ]; then
@@ -89,12 +140,22 @@ echo "Using Python: $PYTHON_BIN ($("$PYTHON_BIN" --version 2>&1))"
 
 if [ -x .venv/bin/python ] && ! is_whisper_python .venv/bin/python; then
   echo "Existing .venv uses an incompatible Python version; recreating it."
-  rm -rf .venv
+  create_venv
 fi
 
 if [ ! -x .venv/bin/python ]; then
-  echo "Creating Python virtual environment..."
-  "$PYTHON_BIN" -m venv .venv
+  create_venv
+fi
+
+# A virtual environment may survive a Python/package-manager change in a
+# partially broken state. Verify pip independently from the Python executable
+# and self-heal before any dependency command is attempted.
+bootstrap_pip
+
+if [ "$BOOTSTRAP_ONLY" -eq 1 ]; then
+  .venv/bin/python -m pip --version
+  echo "Python virtual environment bootstrap check passed."
+  exit 0
 fi
 
 REQUIREMENTS_HASH="$("$PYTHON_BIN" - <<'PY'
@@ -106,7 +167,16 @@ print(hashlib.sha256(path.read_bytes()).hexdigest())
 PY
 )"
 
-PYTHON_RUNTIME="$(.venv/bin/python -c 'import platform, sys; print(f"{platform.system()}-{platform.machine()}-{sys.version_info.major}.{sys.version_info.minor}")')"
+PYTHON_RUNTIME="$(.venv/bin/python - <<'PY'
+import platform
+import sys
+print(
+    f"{platform.system()}-{platform.machine()}-"
+    f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}-"
+    f"{sys.base_prefix}"
+)
+PY
+)"
 FINGERPRINT="${PYTHON_RUNTIME}-${REQUIREMENTS_HASH}"
 STAMP_FILE=".venv/.enjoy-journal-requirements"
 CURRENT=""
@@ -115,7 +185,24 @@ if [ -f "$STAMP_FILE" ]; then
   CURRENT="$(cat "$STAMP_FILE")"
 fi
 
+ai_environment_ready() {
+  .venv/bin/python - <<'PY' >/dev/null 2>&1
+import whisper
+import yt_dlp
+from openai import OpenAI
+from pydantic import BaseModel
+PY
+}
+
+NEED_INSTALL=0
 if [ "$CURRENT" != "$FINGERPRINT" ]; then
+  NEED_INSTALL=1
+elif ! ai_environment_ready; then
+  echo "Python dependency stamp exists, but required packages are missing or broken."
+  NEED_INSTALL=1
+fi
+
+if [ "$NEED_INSTALL" -eq 1 ]; then
   echo "Installing Python AI dependencies..."
   .venv/bin/python -m pip install --upgrade pip setuptools wheel
 
@@ -134,11 +221,11 @@ if [ "$CURRENT" != "$FINGERPRINT" ]; then
   printf "%s" "$FINGERPRINT" > "$STAMP_FILE"
 fi
 
-.venv/bin/python - <<'PY'
-import whisper
-import yt_dlp
-from openai import OpenAI
-from pydantic import BaseModel
+if ! ai_environment_ready; then
+  echo
+  echo "Python dependencies are still unavailable after setup."
+  echo "Run: yarn repair:python"
+  exit 1
+fi
 
-print("Python AI environment ready.")
-PY
+echo "Python AI environment ready."
