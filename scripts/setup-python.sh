@@ -25,25 +25,38 @@ resolve_python() {
   return 1
 }
 
-is_whisper_python() {
+is_supported_python() {
   local python_bin="$1"
   "$python_bin" - <<'PY' >/dev/null 2>&1
 import sys
-raise SystemExit(0 if (3, 10) <= sys.version_info[:2] <= (3, 11) else 1)
+raise SystemExit(0 if (3, 9) <= sys.version_info[:2] <= (3, 11) else 1)
 PY
+}
+
+can_bootstrap_venv() {
+  local python_bin="$1"
+  "$python_bin" -m ensurepip --version >/dev/null 2>&1
 }
 
 find_python() {
   local resolved=""
 
   for candidate in \
+    python3 \
+    python3.9 \
+    /usr/bin/python3 \
+    /opt/homebrew/bin/python3 \
+    /usr/local/bin/python3 \
+    python3.10 \
+    /opt/homebrew/bin/python3.10 \
+    /usr/local/bin/python3.10 \
     python3.11 \
     /opt/homebrew/bin/python3.11 \
     /usr/local/bin/python3.11 \
-    python3
+    python
   do
     resolved="$(resolve_python "$candidate" || true)"
-    if [ -n "$resolved" ] && is_whisper_python "$resolved"; then
+    if [ -n "$resolved" ] && is_supported_python "$resolved" && can_bootstrap_venv "$resolved"; then
       printf "%s\n" "$resolved"
       return 0
     fi
@@ -138,7 +151,7 @@ fi
 
 echo "Using Python: $PYTHON_BIN ($("$PYTHON_BIN" --version 2>&1))"
 
-if [ -x .venv/bin/python ] && ! is_whisper_python .venv/bin/python; then
+if [ -x .venv/bin/python ] && ! is_supported_python .venv/bin/python; then
   echo "Existing .venv uses an incompatible Python version; recreating it."
   create_venv
 fi
