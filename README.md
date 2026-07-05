@@ -30,34 +30,34 @@ Manual media upload remains only as a fallback when a source cannot be imported 
 
 ## What Works
 
-| Capability | Status |
-|---|---|
-| Save source URL and personal note | Done |
-| Upload/replace media | Done |
-| FFmpeg validation and normalization | Done |
-| Local Whisper transcription | Done |
-| Optional OpenAI transcription | Done |
-| Timed transcript segments | Done |
-| Per-segment transcript correction | Done |
-| Raw transcript preservation | Done |
-| Offline `local-basic` lesson provider | Done |
-| Optional OpenAI structured lesson provider | Done |
-| Versioned `lesson.json` artifacts | Done |
-| Today lesson queue | Done |
-| Searchable Library | Done |
-| Synchronized video/audio + transcript | Done |
-| Click sentence to seek | Done |
-| Active sentence highlighting | Done |
-| Sentence loop ×3 | Done |
-| 0.75× / 1× / 1.25× playback speed | Done |
-| Meaning tab | Done |
-| Phrases and patterns tab | Done |
-| Per-lesson Journal editing | Done |
-| Learning progress persistence | Done |
-| Chrome Extension capture | Done |
-| Automatic URL media acquisition | Done |
-| Automatic media → transcript → lesson orchestration | Done |
-| Manual upload fallback | Done |
+| Capability                                          | Status |
+| --------------------------------------------------- | ------ |
+| Save source URL and personal note                   | Done   |
+| Upload/replace media                                | Done   |
+| FFmpeg validation and normalization                 | Done   |
+| Local Whisper transcription                         | Done   |
+| Optional OpenAI transcription                       | Done   |
+| Timed transcript segments                           | Done   |
+| Per-segment transcript correction                   | Done   |
+| Raw transcript preservation                         | Done   |
+| Offline `local-basic` lesson provider               | Done   |
+| Optional OpenAI structured lesson provider          | Done   |
+| Versioned `lesson.json` artifacts                   | Done   |
+| Today lesson queue                                  | Done   |
+| Searchable Library                                  | Done   |
+| Synchronized video/audio + transcript               | Done   |
+| Click sentence to seek                              | Done   |
+| Active sentence highlighting                        | Done   |
+| Sentence loop ×3                                    | Done   |
+| 0.75× / 1× / 1.25× playback speed                   | Done   |
+| Meaning tab                                         | Done   |
+| Phrases and patterns tab                            | Done   |
+| Per-lesson Journal editing                          | Done   |
+| Learning progress persistence                       | Done   |
+| Chrome Extension capture                            | Done   |
+| Automatic URL media acquisition                     | Done   |
+| Automatic media → transcript → lesson orchestration | Done   |
+| Manual upload fallback                              | Done   |
 
 ## Quick Start
 
@@ -89,6 +89,20 @@ runs SQLite migrations
     ↓
 starts Enjoy Journal
 ```
+
+## Backup to Backblaze with Restic
+
+The project now includes a small Restic workflow for backing up the local data directory to Backblaze B2 without committing any credentials.
+
+```bash
+yarn backup:setup
+yarn backup
+yarn backup:list
+yarn backup:restore
+yarn backup:check
+```
+
+The setup step creates a local config at `~/.config/enjoy-journal/backup.env` and a local password file at `~/.config/enjoy-journal/restic-password`. Edit the env file with your Backblaze key ID, application key, bucket name and S3 endpoint before the first backup.
 
 ## Main Product Flow
 
