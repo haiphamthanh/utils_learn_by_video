@@ -23,6 +23,10 @@ export function createInbox(payload) {
   });
 }
 
+export function deleteInbox(inboxId) {
+  return request(`/api/inbox/${inboxId}`, { method: "DELETE" });
+}
+
 export function uploadMedia(inboxId, file) {
   const body = new FormData();
   body.append("media", file);

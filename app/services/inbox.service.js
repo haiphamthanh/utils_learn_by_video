@@ -1,5 +1,8 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
+import path from "node:path";
+
+import { config } from "../config.js";
 
 import { getDatabase } from "../db/database.js";
 
@@ -288,4 +291,99 @@ export function attachMedia(inboxItemId, uploadedFile) {
   }
 
   return getInboxItem(inboxItemId);
+}
+
+
+export function deleteInboxItem(inboxItemId) {
+  const db = getDatabase();
+  const target = db.prepare(`
+    SELECT
+      i.id,
+      i.source_id AS sourceId,
+      i.status,
+      m.id AS mediaAssetId,
+      m.original_path AS originalPath
+    FROM inbox_items i
+    LEFT JOIN media_assets m ON m.inbox_item_id = i.id
+    WHERE i.id = ?
+  `).get(inboxItemId);
+
+  if (!target) {
+    throw notFound();
+  }
+
+  const activeStatuses = new Set([
+    "ACQUIRING_MEDIA",
+    "PROCESSING",
+    "TRANSCRIBING",
+    "LESSON_GENERATING"
+  ]);
+
+  if (activeStatuses.has(target.status)) {
+    throw badRequest(
+      "SOURCE_DELETE_LOCKED",
+      "This source is still being analyzed. Wait for the current step to finish, then delete it."
+    );
+  }
+
+  const lessonIds = db.prepare("SELECT id FROM lessons WHERE inbox_item_id = ?")
+    .all(inboxItemId)
+    .map((row) => row.id);
+
+  const transcriptIds = target.mediaAssetId
+    ? db.prepare("SELECT id FROM transcripts WHERE media_asset_id = ?")
+        .all(target.mediaAssetId)
+        .map((row) => row.id)
+    : [];
+
+  const transaction = db.transaction(() => {
+    for (const lessonId of lessonIds) {
+      db.prepare("DELETE FROM journal_entries WHERE lesson_id = ?").run(lessonId);
+      db.prepare("DELETE FROM learning_progress WHERE lesson_id = ?").run(lessonId);
+    }
+
+    db.prepare("DELETE FROM lesson_generation_jobs WHERE inbox_item_id = ?").run(inboxItemId);
+    db.prepare("DELETE FROM lessons WHERE inbox_item_id = ?").run(inboxItemId);
+    db.prepare("DELETE FROM transcription_jobs WHERE inbox_item_id = ?").run(inboxItemId);
+
+    for (const transcriptId of transcriptIds) {
+      db.prepare("DELETE FROM transcript_segments WHERE transcript_id = ?").run(transcriptId);
+    }
+
+    if (target.mediaAssetId) {
+      db.prepare("DELETE FROM transcripts WHERE media_asset_id = ?").run(target.mediaAssetId);
+    }
+
+    db.prepare("DELETE FROM processing_jobs WHERE inbox_item_id = ?").run(inboxItemId);
+    db.prepare("DELETE FROM source_acquisition_jobs WHERE inbox_item_id = ?").run(inboxItemId);
+    db.prepare("DELETE FROM media_assets WHERE inbox_item_id = ?").run(inboxItemId);
+    db.prepare("DELETE FROM inbox_items WHERE id = ?").run(inboxItemId);
+
+    if (target.sourceId) {
+      const remainingReferences = db.prepare(
+        "SELECT COUNT(*) AS count FROM inbox_items WHERE source_id = ?"
+      ).get(target.sourceId).count;
+
+      if (remainingReferences === 0) {
+        db.prepare("DELETE FROM sources WHERE id = ?").run(target.sourceId);
+      }
+    }
+  });
+
+  transaction();
+
+  if (target.originalPath) {
+    fs.rmSync(target.originalPath, { force: true });
+  }
+
+  fs.rmSync(path.join(config.dataDir, "inbox", inboxItemId), {
+    recursive: true,
+    force: true
+  });
+
+  return {
+    id: inboxItemId,
+    sourceId: target.sourceId,
+    deleted: true
+  };
 }

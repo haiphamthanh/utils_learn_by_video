@@ -5,6 +5,7 @@ import { config } from "../config.js";
 import { startAutomaticPipeline } from "../services/automation.service.js";
 import {
   createInboxItem,
+  deleteInboxItem,
   getInboxItem,
   listInboxItems,
   attachMedia
@@ -98,6 +99,14 @@ export function createInboxRouter() {
   router.get("/:id", (req, res, next) => {
     try {
       res.json({ data: getInboxItem(req.params.id), error: null });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.delete("/:id", (req, res, next) => {
+    try {
+      res.json({ data: deleteInboxItem(req.params.id), error: null });
     } catch (error) {
       next(error);
     }

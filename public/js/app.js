@@ -1,5 +1,6 @@
 import {
   createInbox,
+  deleteInbox,
   generateLesson,
   getLesson,
   getTranscript,
@@ -458,6 +459,7 @@ async function refreshInbox({ quiet = false } = {}) {
       const transcribeAction = fragment.querySelector(".transcribe-action");
       const generateLessonAction = fragment.querySelector(".generate-lesson-action");
       const openLessonAction = fragment.querySelector(".open-lesson-action");
+      const deleteSourceAction = fragment.querySelector(".delete-source-action");
       const processingDetail = fragment.querySelector(".processing-detail");
       const processingLabel = fragment.querySelector(".processing-label");
       const progressBar = fragment.querySelector(".progress-bar");
@@ -625,6 +627,32 @@ async function refreshInbox({ quiet = false } = {}) {
 
       openLessonAction.addEventListener("click", () => {
         if (item.lessonId) void openLesson(item.lessonId, "inbox");
+      });
+
+      deleteSourceAction.disabled = active;
+      deleteSourceAction.addEventListener("click", async () => {
+        const title = displayTitle(item);
+        const confirmed = window.confirm(
+          `Delete "${title}"?\n\nThis permanently removes the source and all local media, transcript, lesson, journal, and progress data linked to it.`
+        );
+
+        if (!confirmed) return;
+
+        deleteSourceAction.disabled = true;
+        deleteSourceAction.textContent = "Deleting…";
+
+        try {
+          await deleteInbox(item.id);
+          await Promise.all([
+            refreshInbox(),
+            refreshToday(),
+            refreshLibrary()
+          ]);
+        } catch (error) {
+          window.alert(error.message);
+          deleteSourceAction.disabled = false;
+          deleteSourceAction.textContent = "Delete source";
+        }
       });
 
       inboxList.append(fragment);
