@@ -1,21 +1,15 @@
 """Enjoy Journal worker entry point.
 
-Phase 1–2 deliberately keep the AI pipeline inactive.
-The next implementation phase will add:
-
-VALIDATE
-  -> PREPARE_MEDIA
-  -> TRANSCRIBE
-  -> CLEAN_SCRIPT
-  -> GENERATE_LESSON
-  -> QUALITY_CHECK
+The active transcription worker is ``worker/transcribe.py``.
+Future phases will add transcript cleaning and lesson generation workers.
 """
 
 from __future__ import annotations
 
 
 def main() -> None:
-    print("Enjoy Journal worker scaffold is ready.")
+    print("Enjoy Journal worker environment is ready.")
+    print("Use worker/transcribe.py for transcription jobs.")
 
 
 if __name__ == "__main__":

@@ -1,60 +1,30 @@
 # Changelog
 
-## v0.2.2
-
-### Fixed
-
-- Upgrade `better-sqlite3` from the old v11 line to v12.11.1
-- Detect Node platform, architecture and ABI changes before database startup
-- Reinstall native dependencies when the runtime fingerprint changes
-- Automatically repair a stale or missing SQLite native binding
-- Stop treating an existing `node_modules` directory as proof that dependencies are valid
+## 0.3.0 — Phase 4 Transcription
 
 ### Added
 
-- Automatic system dependency installer
-- macOS Homebrew support
-- Debian/Ubuntu apt support
-- Fedora dnf support
-- Arch Linux pacman support
-- Automatic FFmpeg and FFprobe installation
-- Optional automatic Homebrew installation on macOS
-- `./scripts/doctor.sh --fix`
-- `yarn setup:system`
-- Node runtime and ABI diagnostics
+- Local Whisper transcription provider.
+- OpenAI transcription provider with timed segments.
+- Provider factory and canonical transcript contract.
+- `transcripts`, `transcript_segments`, and `transcription_jobs` database tables.
+- `POST /api/inbox/:id/transcribe`.
+- `GET /api/inbox/:id/transcription-status`.
+- `GET /api/inbox/:id/transcript`.
+- Automatic `.venv` creation and Python dependency installation.
+- Python 3.11 provisioning on macOS when needed.
+- Transcription progress and interrupted-job recovery.
+- Inbox transcript preview.
+- Deterministic mock-provider smoke test.
 
 ### Changed
 
-- Node.js 22, 24 and 26 are explicitly supported
-- Node.js 24 LTS is the recommended runtime
-- Startup now performs environment setup before migration
-- Yarn runner also supports the Debian `yarnpkg` command
+- Project version upgraded from `0.2.2` to `0.3.0`.
+- `start.sh` now prepares both Node and Python runtime dependencies.
+- Inbox status flow now continues from `MEDIA_READY` to `TRANSCRIPT_READY`.
 
-## v0.2.0
+### Preserved
 
-### Added
-
-- Media processing API
-- FFprobe validation
-- Audio normalization to 16 kHz mono WAV
-- MP4 normalization
-- Poster generation
-- SQLite processing jobs
-- Processing progress UI
-- Retry and reprocess actions
-- Interrupted-job recovery
-- Deterministic media smoke test
-
-### Changed
-
-- Project workflow now uses Yarn instead of npm
-- Startup script uses Yarn directly or through Corepack
-- Machine diagnostics now check FFprobe and Yarn/Corepack
-- Successful Phase 3 output uses `MEDIA_READY` instead of overloading final lesson status `READY`
-
-### Verified
-
-- Static JavaScript checks
-- Shell syntax checks
-- Python syntax checks
-- FFmpeg smoke test producing all expected artifacts
+- Existing SQLite data remains compatible; new tables are created with `IF NOT EXISTS`.
+- Original media and processed artifacts are unchanged.
+- Re-transcription creates a new raw transcript artifact rather than overwriting prior raw JSON.

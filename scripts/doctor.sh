@@ -8,6 +8,7 @@ FIX=0
 if [ "${1:-}" = "--fix" ]; then
   FIX=1
   bash ./scripts/install-system-deps.sh --yes
+  bash ./scripts/setup-python.sh
 fi
 
 failures=0
@@ -65,6 +66,26 @@ NODE
     fi
   else
     printf "○ better-sqlite3 not installed yet\n"
+  fi
+fi
+
+
+if [ -x .venv/bin/python ]; then
+  if .venv/bin/python - <<'PY' >/dev/null 2>&1
+import whisper
+from openai import OpenAI
+PY
+  then
+    printf "✓ Python transcription environment\n"
+  else
+    printf "✗ Python transcription environment\n"
+    printf "  Repair with: yarn setup:python\n"
+    failures=$((failures + 1))
+  fi
+else
+  printf "○ Python transcription environment not prepared yet\n"
+  if [ "$FIX" -eq 0 ]; then
+    printf "  Prepare with: yarn setup:python\n"
   fi
 fi
 

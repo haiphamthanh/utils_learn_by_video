@@ -2,153 +2,48 @@
 
 > Keep the moment. Learn the language.
 
-A local-first application for saving meaningful short-video sources, attaching user-provided media, and turning those moments into listening, speaking and journal lessons.
+A local-first application for saving meaningful short-video sources and turning them into reusable English listening material.
 
 ## Current Version
 
-**v0.2.2 — Phase 3: Media Processing + Automatic Environment Repair**
+**v0.3.0 — Phase 4 Transcription**
+
+The working flow is now:
+
+```text
+Save source URL
+    ↓
+Attach local media
+    ↓
+Process with FFmpeg
+    ↓
+Create timed transcript
+    ↓
+Preview transcript in Inbox
+```
+
+## What Works
 
 | Capability | Status |
 |---|---|
-| Express web application | Done |
-| SQLite persistence | Done |
-| Save source URL + personal note | Done |
-| Inbox filters | Done |
-| Attach or replace media | Done |
-| FFprobe validation | Done |
+| Save source URL and note | Done |
+| Upload/replace media | Done |
+| FFmpeg validation | Done |
 | Audio extraction | Done |
-| Video normalization | Done |
-| Poster generation | Done |
-| Processing jobs + progress | Done |
-| Retry / reprocess | Done |
-| Yarn startup workflow | Done |
-| Automatic system dependency install | Done |
-| Native SQLite binding repair | Done |
-| Transcription | Next |
-| Lesson generation | Later |
+| Normalized video and poster | Done |
+| Local Whisper provider | Done |
+| OpenAI transcription provider | Done |
+| Timed transcript segments | Done |
+| Persistent transcript history | Done |
+| Transcript preview | Done |
+| Lesson generation | Next |
 | Learning player | Later |
-| Chrome Extension | Later |
 
-## Product Flow
-
-```text
-Interesting short video
-        ↓
-Save URL + personal note
-        ↓
-Inbox
-        ↓
-Attach local media
-        ↓
-Process media
-        ↓
-VALIDATE
-        ↓
-PREPARE_MEDIA
-        ↓
-SAVE_ARTIFACTS
-        ↓
-MEDIA_READY
-        ↓
-Transcription (Phase 4)
-```
-
-## Architecture
-
-```text
-Browser
-  │
-  ▼
-Express + Vanilla JS
-  │
-  ├── SQLite
-  │     ├── sources
-  │     ├── inbox_items
-  │     ├── media_assets
-  │     └── processing_jobs
-  │
-  └── Local filesystem
-        ├── original upload
-        ├── normalized.mp4
-        ├── audio.wav
-        └── poster.jpg
-
-Python AI Worker
-  └── scaffolded for Phase 4+
-```
-
-## Repository Map
-
-| Path | Responsibility |
-|---|---|
-| `app/` | Express server, API routes, services and database |
-| `public/` | Vanilla HTML, CSS and JavaScript UI |
-| `worker/` | Future transcription and lesson pipeline |
-| `scripts/` | Diagnostics and media smoke tests |
-| `tests/fixtures/` | Small deterministic local media fixture |
-| `data/` | Local database, user media and generated artifacts |
-| `docs/` | Implementation status |
-
-## Requirements
-
-- Node.js 22, 24 or 26 (Node.js 24 LTS recommended)
-- Yarn 1.22.22, `yarnpkg`, or Corepack
-- Python 3.11+
-- FFmpeg and FFprobe
-
-The normal startup flow installs missing system tools automatically when a supported package manager is available.
-
-Check the machine:
-
-```bash
-./scripts/doctor.sh
-```
-
-Attempt automatic repair:
-
-```bash
-./scripts/doctor.sh --fix
-```
-
-Expected:
-
-```text
-Enjoy Journal Doctor
-
-✓ Node.js
-✓ Python 3
-✓ FFmpeg
-✓ FFprobe
-✓ Yarn or Yarn via Corepack
-```
-
-## Quick Start with Yarn
+## Quick Start
 
 ```bash
 chmod +x start.sh scripts/*.sh
 ./start.sh
-```
-
-The startup script:
-
-```text
-load .env when present
-        ↓
-auto-install missing system dependencies
-        ↓
-check Node runtime and ABI
-        ↓
-use yarn / yarnpkg / Corepack-managed Yarn
-        ↓
-reinstall dependencies when Node ABI or package files changed
-        ↓
-verify better-sqlite3 native binding
-        ↓
-auto-repair native binding when needed
-        ↓
-yarn migrate
-        ↓
-yarn start
 ```
 
 Open:
@@ -157,301 +52,160 @@ Open:
 http://localhost:3000
 ```
 
-## Manual Start
-
-```bash
-yarn install
-yarn migrate
-yarn start
-```
-
-Development mode:
-
-```bash
-yarn dev
-```
-
-## Yarn Decision
-
-The project now uses Yarn as the only documented package-manager workflow.
-
-`package.json` pins:
+`start.sh` automatically:
 
 ```text
-packageManager: yarn@1.22.22
+checks/installs system dependencies
+    ↓
+checks Node native ABI
+    ↓
+installs Yarn dependencies when needed
+    ↓
+creates .venv with compatible Python
+    ↓
+installs Whisper/OpenAI Python dependencies
+    ↓
+runs SQLite migrations
+    ↓
+starts Enjoy Journal
 ```
 
-When `yarn` is not available as a global command, `start.sh` and the user can use Corepack.
+## Local Whisper Default
 
-No npm command is required by the project workflow.
-
-
-## Automatic System Setup
-
-`./start.sh` now calls:
-
-```bash
-./scripts/install-system-deps.sh --yes
-```
-
-Supported automatic installers:
-
-| Platform | Package manager | Packages installed when missing |
-|---|---|---|
-| macOS | Homebrew | Node.js, Python, FFmpeg, Yarn |
-| Debian / Ubuntu | apt | Node.js, Python, FFmpeg, Yarn package |
-| Fedora | dnf | Node.js, Python, FFmpeg |
-| Arch Linux | pacman | Node.js, Python, FFmpeg, Yarn |
-
-On macOS, if Homebrew is missing, the script can install it. If Apple Command Line Tools are missing, macOS opens the official installer and the user reruns `./start.sh` after that installation finishes.
-
-Run setup directly:
-
-```bash
-yarn setup:system
-```
-
-Check without changing the machine:
-
-```bash
-./scripts/install-system-deps.sh --check
-```
-
-## Node.js and SQLite Native Binding
-
-The project pins:
+`.env` defaults:
 
 ```text
-better-sqlite3 12.11.1
+TRANSCRIPTION_PROVIDER=local-whisper
+TRANSCRIPTION_MODEL=base.en
+TRANSCRIPTION_LANGUAGE=en
+WHISPER_DEVICE=cpu
 ```
 
-The startup script fingerprints:
+The first transcription downloads the selected Whisper model. Later transcriptions reuse the local model cache.
+
+For a smaller/faster model:
 
 ```text
-platform + architecture + Node ABI + package.json + yarn.lock
+TRANSCRIPTION_MODEL=tiny.en
 ```
 
-When the fingerprint changes, dependencies are reinstalled for the current runtime. This prevents stale native binaries from surviving a Node.js upgrade.
-
-Manual repair remains available:
-
-```bash
-yarn repair:native
-```
-
-That command:
+For higher accuracy with more compute:
 
 ```text
-ensure build tools
-    ↓
-remove stale better-sqlite3 binding
-    ↓
-yarn install --force
-    ↓
-open an in-memory SQLite database
-    ↓
-verify SELECT 1
+TRANSCRIPTION_MODEL=small.en
 ```
 
-## Media Processing
+## Optional OpenAI Provider
 
-### Input
-
-Supported upload types:
-
-- MP4
-- WebM
-- MP3
-- M4A
-- WAV
-
-The media must contain an audio track because the product is designed for language learning.
-
-### Generated Artifacts
-
-For video:
+Set:
 
 ```text
-data/inbox/{inbox-id}/processed/
-├── normalized.mp4
-├── audio.wav
-└── poster.jpg
+TRANSCRIPTION_PROVIDER=openai
+OPENAI_API_KEY=...
+OPENAI_TRANSCRIPTION_MODEL=whisper-1
 ```
 
-For audio-only input:
-
-```text
-data/inbox/{inbox-id}/processed/
-└── audio.wav
-```
-
-### Normalized Audio Contract
-
-```text
-WAV
-mono
-16 kHz
-PCM 16-bit
-```
-
-This becomes the stable input contract for transcription in Phase 4.
-
-## Processing State
-
-```text
-WAITING_MEDIA
-    ↓
-READY_TO_PROCESS
-    ↓
-PROCESSING
-    ├── QUEUED
-    ├── VALIDATE
-    ├── PREPARE_MEDIA
-    └── SAVE_ARTIFACTS
-    ↓
-MEDIA_READY
-```
-
-Failure:
-
-```text
-PROCESSING
-    ↓
-FAILED
-    ↓
-Retry processing
-```
-
-A server restart while a job is running marks the job as interrupted instead of leaving the item stuck forever in `PROCESSING`.
+The project uses `whisper-1` for the OpenAI provider because the lesson player requires segment timestamps.
 
 ## API
 
-### Create Inbox Item
-
-```http
-POST /api/inbox
-```
-
-### List Inbox Items
-
-```http
-GET /api/inbox
-GET /api/inbox?status=READY_TO_PROCESS
-```
-
-### Upload Media
-
-```http
-POST /api/inbox/:id/media
-Content-Type: multipart/form-data
-```
-
-Field name:
-
-```text
-media
-```
-
-### Start Media Processing
+### Start media processing
 
 ```http
 POST /api/inbox/:id/process
 ```
 
-Returns `202 Accepted`.
-
-### Read Processing Status
+### Start transcription
 
 ```http
-GET /api/inbox/:id/status
+POST /api/inbox/:id/transcribe
 ```
 
-Example:
+### Read transcript
+
+```http
+GET /api/inbox/:id/transcript
+```
+
+Example response:
 
 ```json
 {
   "data": {
-    "inboxStatus": "PROCESSING",
-    "job": {
-      "status": "RUNNING",
-      "stage": "PREPARE_MEDIA",
-      "progress": 35
-    },
-    "error": null
+    "language": "en",
+    "provider": "local-whisper",
+    "model": "base.en",
+    "segments": [
+      {
+        "startMs": 0,
+        "endMs": 2400,
+        "rawText": "I used to think..."
+      }
+    ]
   },
   "error": null
 }
 ```
 
-## Development Commands
+## Python Environment
 
-| Command | Purpose |
-|---|---|
-| `yarn dev` | Start with Node watch mode |
-| `yarn start` | Start normally |
-| `yarn migrate` | Create/update idempotent schema |
-| `yarn doctor` | Check machine requirements |
-| `./scripts/doctor.sh --fix` | Install missing system dependencies |
-| `yarn setup:system` | Run automatic system setup |
-| `yarn repair:native` | Rebuild the SQLite native binding |
-| `yarn check` | JavaScript syntax checks |
-| `yarn smoke:media` | Verify FFmpeg commands and generated artifacts |
+Manual setup/check:
 
-## Media Smoke Test
-
-A deterministic two-second fixture is included:
-
-```text
-tests/fixtures/sample-short.mp4
+```bash
+./scripts/setup-python.sh
 ```
 
-Run:
+Pre-download the configured local Whisper model:
+
+```bash
+yarn model:download
+```
+
+## Smoke Tests
+
+Media:
 
 ```bash
 yarn smoke:media
 ```
 
-Expected artifacts:
+Transcription contract without downloading an AI model:
 
-```text
-✓ audio.wav
-✓ normalized.mp4
-✓ poster.jpg
-Media smoke test passed.
+```bash
+yarn smoke:transcription
 ```
 
-## Data Storage
+## Data
 
 ```text
 data/
 ├── journal.db
-├── inbox/
-│   ├── uploads/
-│   └── {inbox-id}/processed/
-├── lessons/
-└── temp/
+└── inbox/{inbox-id}/
+    ├── processed/
+    │   ├── audio.wav
+    │   ├── normalized.mp4
+    │   └── poster.jpg
+    └── transcript/
+        ├── raw-transcription_job_....json
+        └── ...
 ```
 
-Rules:
-
-- SQLite stores searchable metadata and job state.
-- Media remains on the filesystem.
-- Absolute local paths are not exposed by the public Inbox API.
-- The app processes only files the user explicitly provides.
-- The app does not scrape or crawl social networks.
+Re-transcription creates a new raw JSON artifact. Previous raw transcript artifacts are not silently overwritten.
 
 ## Next Phase
 
-Phase 4 adds one transcription provider behind a stable interface:
+Phase 5 will turn the raw timed transcript into learning material:
 
 ```text
-audio.wav
+Raw transcript
     ↓
-TranscriptionProvider
+Clean script
     ↓
-Timed transcript segments
+Vietnamese meaning
     ↓
-Persist raw transcript
+Key phrases
+    ↓
+Shadowing chunks
+    ↓
+lesson.json
 ```
-
-Do not start lesson generation until timestamped transcription is reliable.

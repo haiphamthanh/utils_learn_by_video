@@ -9,3 +9,5 @@ data/temp/*
 !data/temp/.gitkeep
 .DS_Store
 *.log
+
+.venv/

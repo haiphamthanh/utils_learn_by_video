@@ -13,6 +13,11 @@ import {
   getProcessingStatus,
   startMediaProcessing
 } from "../services/pipeline.service.js";
+import {
+  getTranscript,
+  getTranscriptionStatus,
+  startTranscription
+} from "../services/transcription.service.js";
 
 const allowedMediaTypes = new Set([
   "video/mp4",
@@ -26,12 +31,9 @@ const allowedMediaTypes = new Set([
 
 export function createInboxRouter() {
   const router = Router();
-
   const upload = multer({
     storage: createMediaUploadStorage(),
-    limits: {
-      fileSize: config.maxUploadMb * 1024 * 1024
-    },
+    limits: { fileSize: config.maxUploadMb * 1024 * 1024 },
     fileFilter: (_req, file, callback) => {
       if (!allowedMediaTypes.has(file.mimetype)) {
         const error = new Error("Unsupported media type.");
@@ -45,17 +47,15 @@ export function createInboxRouter() {
   });
 
   router.get("/", (req, res) => {
-    const items = listInboxItems({
-      status: req.query.status || null
+    res.json({
+      data: listInboxItems({ status: req.query.status || null }),
+      error: null
     });
-
-    res.json({ data: items, error: null });
   });
 
   router.post("/", (req, res, next) => {
     try {
-      const item = createInboxItem(req.body);
-      res.status(201).json({ data: item, error: null });
+      res.status(201).json({ data: createInboxItem(req.body), error: null });
     } catch (error) {
       next(error);
     }
@@ -63,8 +63,7 @@ export function createInboxRouter() {
 
   router.get("/:id", (req, res, next) => {
     try {
-      const item = getInboxItem(req.params.id);
-      res.json({ data: item, error: null });
+      res.json({ data: getInboxItem(req.params.id), error: null });
     } catch (error) {
       next(error);
     }
@@ -78,9 +77,7 @@ export function createInboxRouter() {
         error.code = "MEDIA_REQUIRED";
         throw error;
       }
-
-      const result = attachMedia(req.params.id, req.file);
-      res.status(201).json({ data: result, error: null });
+      res.status(201).json({ data: attachMedia(req.params.id, req.file), error: null });
     } catch (error) {
       next(error);
     }
@@ -88,8 +85,7 @@ export function createInboxRouter() {
 
   router.post("/:id/process", (req, res, next) => {
     try {
-      const result = startMediaProcessing(req.params.id);
-      res.status(202).json({ data: result, error: null });
+      res.status(202).json({ data: startMediaProcessing(req.params.id), error: null });
     } catch (error) {
       next(error);
     }
@@ -97,8 +93,31 @@ export function createInboxRouter() {
 
   router.get("/:id/status", (req, res, next) => {
     try {
-      const result = getProcessingStatus(req.params.id);
-      res.json({ data: result, error: null });
+      res.json({ data: getProcessingStatus(req.params.id), error: null });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/:id/transcribe", (req, res, next) => {
+    try {
+      res.status(202).json({ data: startTranscription(req.params.id), error: null });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/:id/transcription-status", (req, res, next) => {
+    try {
+      res.json({ data: getTranscriptionStatus(req.params.id), error: null });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/:id/transcript", (req, res, next) => {
+    try {
+      res.json({ data: getTranscript(req.params.id), error: null });
     } catch (error) {
       next(error);
     }

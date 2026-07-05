@@ -65,6 +65,10 @@ done
 
 node scripts/check-runtime.js
 
+echo
+echo "Preparing Python transcription environment..."
+bash ./scripts/setup-python.sh
+
 mkdir -p data/inbox/uploads data/lessons data/temp node_modules
 
 PACKAGE_HASH="$(node --input-type=module <<'NODE'

@@ -35,7 +35,6 @@ function notFound(message = "Inbox item not found.") {
 
 export function createInboxItem(payload = {}) {
   const db = getDatabase();
-
   const source = payload.source || {};
   const sourceType = source.type || "other-url";
 
@@ -83,7 +82,6 @@ export function createInboxItem(payload = {}) {
   });
 
   transaction();
-
   return getInboxItem(inboxId);
 }
 
@@ -111,34 +109,56 @@ export function listInboxItems({ status = null } = {}) {
       CASE WHEN m.normalized_video_path IS NOT NULL THEN 1 ELSE 0 END AS hasNormalizedVideo,
       CASE WHEN m.normalized_audio_path IS NOT NULL THEN 1 ELSE 0 END AS hasNormalizedAudio,
       CASE WHEN m.poster_path IS NOT NULL THEN 1 ELSE 0 END AS hasPoster,
-      j.stage AS processingStage,
-      j.progress AS processingProgress
+      pj.stage AS processingStage,
+      pj.progress AS processingProgress,
+      tj.stage AS transcriptionStage,
+      tj.progress AS transcriptionProgress,
+      t.id AS transcriptId,
+      t.raw_text AS transcriptText,
+      t.language AS transcriptLanguage,
+      t.provider AS transcriptProvider,
+      t.model AS transcriptModel,
+      (
+        SELECT COUNT(*)
+        FROM transcript_segments ts
+        WHERE ts.transcript_id = t.id
+      ) AS transcriptSegmentCount
     FROM inbox_items i
     LEFT JOIN sources s ON s.id = i.source_id
     LEFT JOIN media_assets m ON m.inbox_item_id = i.id
-    LEFT JOIN processing_jobs j ON j.id = (
+    LEFT JOIN processing_jobs pj ON pj.id = (
       SELECT id
       FROM processing_jobs
       WHERE inbox_item_id = i.id
       ORDER BY started_at DESC
       LIMIT 1
     )
+    LEFT JOIN transcription_jobs tj ON tj.id = (
+      SELECT id
+      FROM transcription_jobs
+      WHERE inbox_item_id = i.id
+      ORDER BY started_at DESC
+      LIMIT 1
+    )
+    LEFT JOIN transcripts t ON t.id = (
+      SELECT id
+      FROM transcripts
+      WHERE media_asset_id = m.id
+      ORDER BY created_at DESC
+      LIMIT 1
+    )
   `;
 
   const params = [];
-
   if (status) {
     sql += " WHERE i.status = ?";
     params.push(status);
   }
-
   sql += " ORDER BY i.updated_at DESC";
-
   return db.prepare(sql).all(...params);
 }
 
 export function getInboxItem(id) {
-  const db = getDatabase();
   const item = listInboxItems().find((entry) => entry.id === id);
   if (!item) throw notFound();
   return item;
@@ -146,52 +166,53 @@ export function getInboxItem(id) {
 
 export function attachMedia(inboxItemId, uploadedFile) {
   const db = getDatabase();
-
-  const existing = db
-    .prepare("SELECT id, status FROM inbox_items WHERE id = ?")
-    .get(inboxItemId);
+  const existing = db.prepare("SELECT id, status FROM inbox_items WHERE id = ?").get(inboxItemId);
 
   if (!existing) {
     fs.rmSync(uploadedFile.path, { force: true });
     throw notFound();
   }
 
-  if (existing.status === "PROCESSING") {
+  if (["PROCESSING", "TRANSCRIBING"].includes(existing.status)) {
     fs.rmSync(uploadedFile.path, { force: true });
     throw badRequest("MEDIA_LOCKED", "Media cannot be replaced while processing.");
   }
 
-  const oldMedia = db
-    .prepare(`
-      SELECT
-        original_path AS originalPath,
-        normalized_video_path AS normalizedVideoPath,
-        normalized_audio_path AS normalizedAudioPath,
-        poster_path AS posterPath
-      FROM media_assets
-      WHERE inbox_item_id = ?
-    `)
-    .get(inboxItemId);
+  const oldMedia = db.prepare(`
+    SELECT
+      id,
+      original_path AS originalPath,
+      normalized_video_path AS normalizedVideoPath,
+      normalized_audio_path AS normalizedAudioPath,
+      poster_path AS posterPath
+    FROM media_assets
+    WHERE inbox_item_id = ?
+  `).get(inboxItemId);
 
   const mediaAssetId = makeId("media");
   const createdAt = nowIso();
 
   const transaction = db.transaction(() => {
-    db.prepare("DELETE FROM processing_jobs WHERE inbox_item_id = ?")
-      .run(inboxItemId);
+    db.prepare("DELETE FROM transcription_jobs WHERE inbox_item_id = ?").run(inboxItemId);
 
-    db.prepare("DELETE FROM media_assets WHERE inbox_item_id = ?")
-      .run(inboxItemId);
+    if (oldMedia?.id) {
+      const transcriptIds = db.prepare("SELECT id FROM transcripts WHERE media_asset_id = ?")
+        .all(oldMedia.id)
+        .map((row) => row.id);
+
+      for (const transcriptId of transcriptIds) {
+        db.prepare("DELETE FROM transcript_segments WHERE transcript_id = ?").run(transcriptId);
+      }
+
+      db.prepare("DELETE FROM transcripts WHERE media_asset_id = ?").run(oldMedia.id);
+    }
+
+    db.prepare("DELETE FROM processing_jobs WHERE inbox_item_id = ?").run(inboxItemId);
+    db.prepare("DELETE FROM media_assets WHERE inbox_item_id = ?").run(inboxItemId);
 
     db.prepare(`
       INSERT INTO media_assets (
-        id,
-        inbox_item_id,
-        original_filename,
-        media_type,
-        original_path,
-        size_bytes,
-        created_at
+        id, inbox_item_id, original_filename, media_type, original_path, size_bytes, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
       mediaAssetId,

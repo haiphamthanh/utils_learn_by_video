@@ -14,9 +14,10 @@ class PipelineJob:
     config: dict[str, Any]
 
 
-def run_pipeline(job: PipelineJob) -> dict[str, Any]:
-    """Run the complete media-to-lesson pipeline.
+def run_lesson_pipeline(job: PipelineJob) -> dict[str, Any]:
+    """Run transcript cleaning and lesson generation.
 
-    Implemented in Phase 3 onward.
+    Reserved for Phase 5. Media preparation and transcription are already
+    implemented by the Node orchestrator plus dedicated workers.
     """
-    raise NotImplementedError("Pipeline stages are not implemented yet.")
+    raise NotImplementedError("Lesson generation starts in Phase 5.")

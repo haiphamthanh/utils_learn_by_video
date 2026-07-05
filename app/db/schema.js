@@ -55,6 +55,52 @@ CREATE TABLE IF NOT EXISTS processing_jobs (
   FOREIGN KEY(media_asset_id) REFERENCES media_assets(id)
 );
 
+CREATE TABLE IF NOT EXISTS transcripts (
+  id TEXT PRIMARY KEY,
+  media_asset_id TEXT NOT NULL,
+  language TEXT,
+  raw_text TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL,
+  status TEXT NOT NULL,
+  raw_json_path TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(media_asset_id) REFERENCES media_assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS transcript_segments (
+  id TEXT PRIMARY KEY,
+  transcript_id TEXT NOT NULL,
+  sequence INTEGER NOT NULL,
+  start_ms INTEGER NOT NULL,
+  end_ms INTEGER NOT NULL,
+  raw_text TEXT NOT NULL,
+  cleaned_text TEXT,
+  reviewed_text TEXT,
+  confidence REAL,
+  review_status TEXT NOT NULL DEFAULT 'UNREVIEWED',
+  FOREIGN KEY(transcript_id) REFERENCES transcripts(id)
+);
+
+CREATE TABLE IF NOT EXISTS transcription_jobs (
+  id TEXT PRIMARY KEY,
+  inbox_item_id TEXT NOT NULL,
+  media_asset_id TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL,
+  status TEXT NOT NULL,
+  stage TEXT NOT NULL,
+  progress INTEGER NOT NULL DEFAULT 0,
+  error_code TEXT,
+  error_message TEXT,
+  started_at TEXT NOT NULL,
+  completed_at TEXT,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(inbox_item_id) REFERENCES inbox_items(id),
+  FOREIGN KEY(media_asset_id) REFERENCES media_assets(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_inbox_status
   ON inbox_items(status);
 
@@ -66,4 +112,13 @@ CREATE INDEX IF NOT EXISTS idx_media_inbox_item
 
 CREATE INDEX IF NOT EXISTS idx_processing_jobs_inbox
   ON processing_jobs(inbox_item_id, started_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_transcripts_media
+  ON transcripts(media_asset_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_transcript_segments_transcript
+  ON transcript_segments(transcript_id, sequence);
+
+CREATE INDEX IF NOT EXISTS idx_transcription_jobs_inbox
+  ON transcription_jobs(inbox_item_id, started_at DESC);
 `;

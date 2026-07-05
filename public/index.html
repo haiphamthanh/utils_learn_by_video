@@ -84,6 +84,15 @@
           <button class="filter-chip" data-status-filter="MEDIA_READY">
             Media ready
           </button>
+          <button class="filter-chip" data-status-filter="TRANSCRIBING">
+            Transcribing
+          </button>
+          <button class="filter-chip" data-status-filter="TRANSCRIPT_READY">
+            Transcript ready
+          </button>
+          <button class="filter-chip" data-status-filter="TRANSCRIPTION_FAILED">
+            Transcription failed
+          </button>
           <button class="filter-chip" data-status-filter="FAILED">
             Failed
           </button>
@@ -201,7 +210,15 @@
           <button class="process-action" type="button" hidden>
             Process media
           </button>
+          <button class="transcribe-action" type="button" hidden>
+            Create transcript
+          </button>
         </div>
+        <details class="transcript-preview" hidden>
+          <summary>Transcript preview</summary>
+          <p class="transcript-provider"></p>
+          <div class="transcript-text"></div>
+        </details>
       </article>
     </template>
 

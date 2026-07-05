@@ -534,3 +534,72 @@ button {
   background: #f8dddd;
   color: #7a2424;
 }
+
+
+.transcribe-action {
+  width: 100%;
+  margin-top: 10px;
+  border: 0;
+  border-radius: 999px;
+  padding: 11px 16px;
+  background: var(--accent);
+  color: white;
+  font-weight: 800;
+}
+
+.transcribe-action:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+.transcribe-action:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.transcript-preview {
+  grid-column: 1 / -1;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.transcript-preview summary {
+  cursor: pointer;
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+
+.transcript-provider {
+  margin: 12px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.transcript-text {
+  display: grid;
+  gap: 8px;
+}
+
+.transcript-text p {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 12px;
+  margin: 0;
+  line-height: 1.55;
+}
+
+.transcript-text span {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  padding-top: 3px;
+}
+
+.inbox-card[data-status="TRANSCRIPT_READY"] .status-badge {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.inbox-card[data-status="TRANSCRIPTION_FAILED"] .status-badge {
+  background: #f8dddd;
+  color: #7a2424;
+}

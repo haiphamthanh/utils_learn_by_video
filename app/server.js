@@ -7,24 +7,27 @@ import { initializeDatabase } from "./db/database.js";
 import { createInboxRouter } from "./routes/inbox.routes.js";
 import { createHealthRouter } from "./routes/health.routes.js";
 import { recoverInterruptedProcessingJobs } from "./services/pipeline.service.js";
+import { recoverInterruptedTranscriptionJobs } from "./services/transcription.service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 initializeDatabase();
-const recoveredJobs = recoverInterruptedProcessingJobs();
-if (recoveredJobs > 0) {
-  console.log(`Recovered ${recoveredJobs} interrupted processing job(s).`);
+const recoveredMediaJobs = recoverInterruptedProcessingJobs();
+const recoveredTranscriptionJobs = recoverInterruptedTranscriptionJobs();
+
+if (recoveredMediaJobs > 0) {
+  console.log(`Recovered ${recoveredMediaJobs} interrupted media job(s).`);
+}
+if (recoveredTranscriptionJobs > 0) {
+  console.log(`Recovered ${recoveredTranscriptionJobs} interrupted transcription job(s).`);
 }
 
 const app = express();
-
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
-
 app.use("/api/health", createHealthRouter());
 app.use("/api/inbox", createInboxRouter());
-
 app.use(express.static(path.resolve(__dirname, "../public")));
 
 app.use((req, res, next) => {
@@ -34,20 +37,19 @@ app.use((req, res, next) => {
 
 app.use((error, _req, res, _next) => {
   console.error("[HTTP_ERROR]", error);
-
   const status = Number(error.status || 500);
   res.status(status).json({
     data: null,
     error: {
       code: error.code || "INTERNAL_ERROR",
-      message:
-        status >= 500
-          ? "The application could not complete this request."
-          : error.message
+      message: status >= 500
+        ? "The application could not complete this request."
+        : error.message
     }
   });
 });
 
 app.listen(config.port, () => {
   console.log(`Enjoy Journal running at http://localhost:${config.port}`);
+  console.log(`Transcription provider: ${config.transcriptionProvider}`);
 });

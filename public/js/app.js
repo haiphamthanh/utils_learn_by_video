@@ -1,7 +1,9 @@
 import {
   createInbox,
+  getTranscript,
   listInbox,
   processMedia,
+  transcribeMedia,
   uploadMedia
 } from "./api.js";
 
@@ -16,7 +18,7 @@ const inboxTemplate = document.querySelector("#inbox-card-template");
 const statusFilters = [...document.querySelectorAll("[data-status-filter]")];
 
 let currentStatusFilter = "";
-let processingPollTimer = null;
+let activePollTimer = null;
 
 function showPage(pageName) {
   pages.forEach((page) => {
@@ -27,9 +29,7 @@ function showPage(pageName) {
     link.classList.toggle("is-active", link.dataset.page === pageName);
   });
 
-  if (pageName === "inbox") {
-    void refreshInbox();
-  }
+  if (pageName === "inbox") void refreshInbox();
 }
 
 function sourceName(type) {
@@ -46,9 +46,12 @@ function statusName(status) {
   return {
     WAITING_MEDIA: "Waiting for media",
     READY_TO_PROCESS: "Ready to process",
-    PROCESSING: "Processing",
+    PROCESSING: "Processing media",
     MEDIA_READY: "Media ready",
-    FAILED: "Failed",
+    TRANSCRIBING: "Transcribing",
+    TRANSCRIPT_READY: "Transcript ready",
+    TRANSCRIPTION_FAILED: "Transcription failed",
+    FAILED: "Media failed",
     NEEDS_REVIEW: "Needs review"
   }[status] || status;
 }
@@ -58,35 +61,98 @@ function stageName(stage) {
     QUEUED: "Queued",
     VALIDATE: "Validating media",
     PREPARE_MEDIA: "Preparing audio and video",
-    SAVE_ARTIFACTS: "Saving artifacts",
-    COMPLETE: "Media ready",
-    FAILED: "Processing failed"
-  }[stage] || stage || "Processing";
+    SAVE_ARTIFACTS: "Saving media artifacts",
+    STARTING: "Starting transcription worker",
+    LOAD_MODEL: "Loading Whisper model",
+    UPLOAD_AUDIO: "Uploading audio",
+    TRANSCRIBE: "Listening and transcribing",
+    VALIDATE_TRANSCRIPT: "Checking timed transcript",
+    SAVE_TRANSCRIPT: "Saving transcript",
+    COMPLETE: "Complete",
+    FAILED: "Failed"
+  }[stage] || stage || "Working";
 }
 
 function displayTitle(item) {
   if (item.sourceTitle) return item.sourceTitle;
 
   try {
-    const url = new URL(item.sourceUrl);
-    return url.hostname.replace(/^www\./, "");
+    return new URL(item.sourceUrl).hostname.replace(/^www\./, "");
   } catch {
     return "Saved source";
   }
 }
 
-function ensureProcessingPolling(items) {
-  const hasProcessing = items.some((item) => item.status === "PROCESSING");
+function ensurePolling(items) {
+  const hasActiveJob = items.some((item) =>
+    ["PROCESSING", "TRANSCRIBING"].includes(item.status)
+  );
 
-  if (hasProcessing && !processingPollTimer) {
-    processingPollTimer = window.setInterval(() => {
+  if (hasActiveJob && !activePollTimer) {
+    activePollTimer = window.setInterval(() => {
       void refreshInbox({ quiet: true });
     }, 1500);
   }
 
-  if (!hasProcessing && processingPollTimer) {
-    window.clearInterval(processingPollTimer);
-    processingPollTimer = null;
+  if (!hasActiveJob && activePollTimer) {
+    window.clearInterval(activePollTimer);
+    activePollTimer = null;
+  }
+}
+
+function setProgress(item, detail, label, progressBar) {
+  if (!["PROCESSING", "TRANSCRIBING"].includes(item.status)) return;
+
+  detail.hidden = false;
+  const isTranscription = item.status === "TRANSCRIBING";
+  const progress = Math.max(
+    0,
+    Math.min(
+      100,
+      isTranscription
+        ? item.transcriptionProgress || 0
+        : item.processingProgress || 0
+    )
+  );
+  const stage = isTranscription
+    ? item.transcriptionStage
+    : item.processingStage;
+
+  progressBar.style.width = `${progress}%`;
+  label.textContent = `${stageName(stage)} · ${progress}%`;
+}
+
+function formatTime(milliseconds) {
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
+
+function escapeHtml(value) {
+  const div = document.createElement("div");
+  div.textContent = value;
+  return div.innerHTML;
+}
+
+async function loadTranscriptPreview(item, details, providerLabel, transcriptText) {
+  try {
+    const transcript = await getTranscript(item.id);
+    details.hidden = false;
+    providerLabel.textContent =
+      `${transcript.provider} · ${transcript.model} · ${transcript.segments.length} segments`;
+
+    transcriptText.innerHTML = transcript.segments
+      .slice(0, 6)
+      .map((segment) => `
+        <p>
+          <span>${formatTime(segment.startMs)}</span>
+          ${escapeHtml(segment.reviewedText || segment.cleanedText || segment.rawText)}
+        </p>
+      `)
+      .join("");
+  } catch {
+    details.hidden = true;
   }
 }
 
@@ -98,7 +164,7 @@ async function refreshInbox({ quiet = false } = {}) {
   try {
     const allItems = await listInbox("");
     inboxCount.textContent = allItems.length;
-    ensureProcessingPolling(allItems);
+    ensurePolling(allItems);
 
     const items = currentStatusFilter
       ? allItems.filter((item) => item.status === currentStatusFilter)
@@ -130,10 +196,14 @@ async function refreshInbox({ quiet = false } = {}) {
       const uploadLabel = fragment.querySelector(".upload-label");
       const mediaFilename = fragment.querySelector(".media-filename");
       const processAction = fragment.querySelector(".process-action");
+      const transcribeAction = fragment.querySelector(".transcribe-action");
       const processingDetail = fragment.querySelector(".processing-detail");
       const processingLabel = fragment.querySelector(".processing-label");
       const progressBar = fragment.querySelector(".progress-bar");
       const itemError = fragment.querySelector(".item-error");
+      const transcriptPreview = fragment.querySelector(".transcript-preview");
+      const transcriptProvider = fragment.querySelector(".transcript-provider");
+      const transcriptText = fragment.querySelector(".transcript-text");
 
       card.dataset.id = item.id;
       card.dataset.status = item.status;
@@ -141,7 +211,6 @@ async function refreshInbox({ quiet = false } = {}) {
       statusBadge.textContent = statusName(item.status);
       sourceTitle.textContent = displayTitle(item);
       sourceNote.textContent = item.personalNote || "No note yet.";
-
       sourceLink.href = item.sourceUrl;
       sourceLink.hidden = !item.sourceUrl;
 
@@ -150,23 +219,31 @@ async function refreshInbox({ quiet = false } = {}) {
         mediaFilename.textContent = item.mediaFilename;
       }
 
-      if (item.status === "PROCESSING") {
+      const active = ["PROCESSING", "TRANSCRIBING"].includes(item.status);
+      if (active) {
         uploadAction.hidden = true;
         processAction.hidden = true;
-        processingDetail.hidden = false;
-        const progress = Math.max(0, Math.min(100, item.processingProgress || 0));
-        progressBar.style.width = `${progress}%`;
-        processingLabel.textContent = `${stageName(item.processingStage)} · ${progress}%`;
+        transcribeAction.hidden = true;
       }
 
-      if (["READY_TO_PROCESS", "FAILED", "MEDIA_READY"].includes(item.status)) {
+      setProgress(item, processingDetail, processingLabel, progressBar);
+
+      if (["READY_TO_PROCESS", "FAILED"].includes(item.status)) {
         processAction.hidden = false;
         processAction.textContent =
           item.status === "FAILED"
-            ? "Retry processing"
-            : item.status === "MEDIA_READY"
-              ? "Reprocess media"
-              : "Process media";
+            ? "Retry media processing"
+            : "Process media";
+      }
+
+      if (["MEDIA_READY", "TRANSCRIPTION_FAILED", "TRANSCRIPT_READY"].includes(item.status)) {
+        transcribeAction.hidden = false;
+        transcribeAction.textContent =
+          item.status === "TRANSCRIPT_READY"
+            ? "Transcribe again"
+            : item.status === "TRANSCRIPTION_FAILED"
+              ? "Retry transcription"
+              : "Create transcript";
       }
 
       if (item.errorMessage) {
@@ -174,7 +251,16 @@ async function refreshInbox({ quiet = false } = {}) {
         itemError.textContent = item.errorMessage;
       }
 
-      mediaInput.disabled = item.status === "PROCESSING";
+      if (item.status === "TRANSCRIPT_READY") {
+        void loadTranscriptPreview(
+          item,
+          transcriptPreview,
+          transcriptProvider,
+          transcriptText
+        );
+      }
+
+      mediaInput.disabled = active;
       mediaInput.addEventListener("change", async () => {
         const file = mediaInput.files?.[0];
         if (!file) return;
@@ -205,13 +291,26 @@ async function refreshInbox({ quiet = false } = {}) {
         }
       });
 
+      transcribeAction.addEventListener("click", async () => {
+        transcribeAction.disabled = true;
+        transcribeAction.textContent = "Starting…";
+
+        try {
+          await transcribeMedia(item.id);
+          await refreshInbox();
+        } catch (error) {
+          window.alert(error.message);
+          await refreshInbox();
+        }
+      });
+
       inboxList.append(fragment);
     }
   } catch (error) {
     inboxList.innerHTML = `
       <div class="empty-card">
         <h3>Inbox could not be loaded</h3>
-        <p>${error.message}</p>
+        <p>${escapeHtml(error.message)}</p>
       </div>
     `;
   }
@@ -236,11 +335,9 @@ for (const button of document.querySelectorAll("[data-close-dialog]")) {
 for (const filter of statusFilters) {
   filter.addEventListener("click", async () => {
     currentStatusFilter = filter.dataset.statusFilter;
-
     statusFilters.forEach((item) => {
       item.classList.toggle("is-active", item === filter);
     });
-
     await refreshInbox();
   });
 }

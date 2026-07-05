@@ -3,8 +3,7 @@ async function request(url, options = {}) {
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const message =
-      payload?.error?.message || `Request failed with status ${response.status}.`;
+    const message = payload?.error?.message || `Request failed with status ${response.status}.`;
     throw new Error(message);
   }
 
@@ -19,9 +18,7 @@ export function listInbox(status = "") {
 export function createInbox(payload) {
   return request("/api/inbox", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
 }
@@ -29,19 +26,17 @@ export function createInbox(payload) {
 export function uploadMedia(inboxId, file) {
   const body = new FormData();
   body.append("media", file);
-
-  return request(`/api/inbox/${inboxId}/media`, {
-    method: "POST",
-    body
-  });
+  return request(`/api/inbox/${inboxId}/media`, { method: "POST", body });
 }
 
 export function processMedia(inboxId) {
-  return request(`/api/inbox/${inboxId}/process`, {
-    method: "POST"
-  });
+  return request(`/api/inbox/${inboxId}/process`, { method: "POST" });
 }
 
-export function getProcessingStatus(inboxId) {
-  return request(`/api/inbox/${inboxId}/status`);
+export function transcribeMedia(inboxId) {
+  return request(`/api/inbox/${inboxId}/transcribe`, { method: "POST" });
+}
+
+export function getTranscript(inboxId) {
+  return request(`/api/inbox/${inboxId}/transcript`);
 }

@@ -1,2 +1,2 @@
-# Phase 1–2 has no Python runtime dependencies.
-# Add transcription dependencies only when Phase 4 begins.
+openai-whisper==20250625
+openai>=1.0,<3
