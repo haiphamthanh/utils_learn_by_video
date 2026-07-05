@@ -29,7 +29,7 @@ is_supported_python() {
   local python_bin="$1"
   "$python_bin" - <<'PY' >/dev/null 2>&1
 import sys
-raise SystemExit(0 if (3, 9) <= sys.version_info[:2] <= (3, 11) else 1)
+raise SystemExit(0 if sys.version_info[:2] == (3, 9) else 1)
 PY
 }
 
@@ -42,17 +42,14 @@ find_python() {
   local resolved=""
 
   for candidate in \
-    python3 \
     python3.9 \
+    /usr/bin/python3.9 \
+    /opt/homebrew/bin/python3.9 \
+    /usr/local/bin/python3.9 \
+    python3 \
     /usr/bin/python3 \
     /opt/homebrew/bin/python3 \
     /usr/local/bin/python3 \
-    python3.10 \
-    /opt/homebrew/bin/python3.10 \
-    /usr/local/bin/python3.10 \
-    python3.11 \
-    /opt/homebrew/bin/python3.11 \
-    /usr/local/bin/python3.11 \
     python
   do
     resolved="$(resolve_python "$candidate" || true)"
@@ -78,16 +75,16 @@ refresh_homebrew_path() {
   done
 }
 
-install_python_311_macos() {
+install_python_39_macos() {
   refresh_homebrew_path
 
   if ! command -v brew >/dev/null 2>&1; then
-    echo "Python 3.11 is required for local Whisper and Homebrew is unavailable."
+    echo "Python 3.9 is required for local Whisper and Homebrew is unavailable."
     exit 1
   fi
 
-  echo "Installing Python 3.11 for the transcription worker..."
-  brew install python@3.11
+  echo "Installing Python 3.9 for the transcription worker..."
+  brew install python@3.9
 }
 
 create_venv() {
@@ -139,13 +136,13 @@ bootstrap_pip() {
 PYTHON_BIN="$(find_python || true)"
 
 if [ -z "$PYTHON_BIN" ] && [ "$(uname -s)" = "Darwin" ]; then
-  install_python_311_macos
+  install_python_39_macos
   PYTHON_BIN="$(find_python || true)"
 fi
 
 if [ -z "$PYTHON_BIN" ]; then
-  echo "A Python 3.10-3.11 runtime is required for local Whisper and automatic URL import."
-  echo "Install Python 3.11, then rerun ./start.sh."
+  echo "A Python 3.9 runtime is required for local Whisper and automatic URL import."
+  echo "Install Python 3.9, then rerun ./start.sh."
   exit 1
 fi
 

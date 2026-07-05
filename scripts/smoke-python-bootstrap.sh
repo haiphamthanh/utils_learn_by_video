@@ -8,7 +8,7 @@ TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 PYTHON_BIN=""
-for candidate in python3.11 /opt/homebrew/bin/python3.11 /usr/local/bin/python3.11 python3; do
+for candidate in python3.9 /opt/homebrew/bin/python3.9 /usr/local/bin/python3.9 python3; do
   if command -v "$candidate" >/dev/null 2>&1; then
     PYTHON_BIN="$(command -v "$candidate")"
     break
@@ -22,6 +22,11 @@ if [ -z "$PYTHON_BIN" ]; then
   echo "No Python runtime available for bootstrap smoke test."
   exit 1
 fi
+
+"$PYTHON_BIN" - <<'PY' >/dev/null 2>&1
+import sys
+raise SystemExit(0 if sys.version_info[:2] == (3, 9) else 1)
+PY
 
 "$PYTHON_BIN" -m venv "$TMP_DIR/venv"
 

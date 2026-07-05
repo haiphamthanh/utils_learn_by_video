@@ -35,6 +35,22 @@ have() {
   command -v "$1" >/dev/null 2>&1
 }
 
+have_python39() {
+  if have python3.9; then
+    return 0
+  fi
+
+  if have python3; then
+    python3 - <<'PY' >/dev/null 2>&1
+import sys
+raise SystemExit(0 if sys.version_info[:2] == (3, 9) else 1)
+PY
+    return $?
+  fi
+
+  return 1
+}
+
 confirm() {
   local prompt="$1"
 
@@ -171,7 +187,7 @@ install_macos() {
 
   local formulae=()
   have node || formulae+=("node")
-  have python3 || formulae+=("python")
+  have_python39 || formulae+=("python@3.9")
 
   if ! have ffmpeg || ! have ffprobe; then
     formulae+=("ffmpeg")
