@@ -39,9 +39,6 @@
             speaking and journal material without returning to the feed.
           </p>
 
-          <button class="primary-action" data-open-capture>
-            Save a new moment
-          </button>
         </div>
 
         <div class="today-panel">
@@ -64,46 +61,10 @@
         </div>
 
         <div class="filter-row">
-          <button class="filter-chip is-active" data-status-filter="">All</button>
-          <button class="filter-chip" data-status-filter="ACQUIRING_MEDIA">
-            Importing URL
-          </button>
-          <button class="filter-chip" data-status-filter="MEDIA_ACQUISITION_FAILED">
-            Import needs attention
-          </button>
-          <button class="filter-chip" data-status-filter="WAITING_MEDIA">
-            Manual fallback
-          </button>
-          <button class="filter-chip" data-status-filter="READY_TO_PROCESS">
-            Ready to process
-          </button>
-          <button class="filter-chip" data-status-filter="PROCESSING">
-            Processing
-          </button>
-          <button class="filter-chip" data-status-filter="MEDIA_READY">
-            Media ready
-          </button>
-          <button class="filter-chip" data-status-filter="TRANSCRIBING">
-            Transcribing
-          </button>
-          <button class="filter-chip" data-status-filter="TRANSCRIPT_READY">
-            Transcript ready
-          </button>
-          <button class="filter-chip" data-status-filter="TRANSCRIPTION_FAILED">
-            Transcription failed
-          </button>
-          <button class="filter-chip" data-status-filter="LESSON_GENERATING">
-            Generating lesson
-          </button>
-          <button class="filter-chip" data-status-filter="LESSON_READY">
-            Lesson ready
-          </button>
-          <button class="filter-chip" data-status-filter="LESSON_FAILED">
-            Lesson failed
-          </button>
-          <button class="filter-chip" data-status-filter="FAILED">
-            Failed
-          </button>
+          <button class="filter-chip is-active" data-status-filter="all">All</button>
+          <button class="filter-chip" data-status-filter="active">In progress</button>
+          <button class="filter-chip" data-status-filter="ready">Ready</button>
+          <button class="filter-chip" data-status-filter="attention">Needs attention</button>
         </div>
 
         <div id="inbox-list" class="inbox-list" aria-live="polite"></div>

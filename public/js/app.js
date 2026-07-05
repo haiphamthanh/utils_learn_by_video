@@ -29,11 +29,32 @@ const librarySearch = document.querySelector("#library-search");
 const libraryStatusFilters = [...document.querySelectorAll("[data-library-status]")];
 const lessonPlayerRoot = document.querySelector("#lesson-player-root");
 
-let currentStatusFilter = "";
+let currentStatusFilter = "all";
 let currentLibraryStatus = "";
 let activePollTimer = null;
 let librarySearchTimer = null;
 let returnPageAfterLesson = "library";
+
+const inboxStatusGroups = {
+  all: null,
+  active: new Set([
+    "ACQUIRING_MEDIA",
+    "READY_TO_PROCESS",
+    "PROCESSING",
+    "MEDIA_READY",
+    "TRANSCRIBING",
+    "TRANSCRIPT_READY",
+    "LESSON_GENERATING"
+  ]),
+  ready: new Set(["LESSON_READY"]),
+  attention: new Set([
+    "MEDIA_ACQUISITION_FAILED",
+    "WAITING_MEDIA",
+    "TRANSCRIPTION_FAILED",
+    "LESSON_FAILED",
+    "FAILED"
+  ])
+};
 
 const lessonPlayer = createLessonPlayer({
   root: lessonPlayerRoot,
@@ -425,8 +446,9 @@ async function refreshInbox({ quiet = false } = {}) {
     inboxCount.textContent = allItems.length;
     ensurePolling(allItems);
 
-    const items = currentStatusFilter
-      ? allItems.filter((item) => item.status === currentStatusFilter)
+    const selectedStatuses = inboxStatusGroups[currentStatusFilter];
+    const items = selectedStatuses
+      ? allItems.filter((item) => selectedStatuses.has(item.status))
       : allItems;
 
     if (items.length === 0) {
