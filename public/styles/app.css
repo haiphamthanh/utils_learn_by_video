@@ -456,6 +456,7 @@ button {
 }
 
 .lesson-info-card {
+  position: relative;
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
   gap: 0;
@@ -463,7 +464,6 @@ button {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--surface);
-  padding-right: 48px;
 }
 
 .lesson-info-media {
@@ -510,19 +510,8 @@ button {
   line-height: 1.6;
 }
 
-.lesson-info-body .source-link,
-.lesson-info-body .secondary-action,
-.lesson-info-body .primary-action {
-  min-height: 34px;
-  border-radius: 999px;
-  padding: 7px 12px;
-  font-size: 13px;
-  font-weight: 800;
-}
-
 .lesson-info-kicker,
-.lesson-info-stats,
-.lesson-info-actions {
+.lesson-info-stats {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -537,24 +526,10 @@ button {
   text-transform: uppercase;
 }
 
-.lesson-info-actions {
+.lesson-info-card-actions {
   margin-top: 0;
-}
-
-.lesson-info-preview {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.lesson-info-preview svg {
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  padding-right: 0;
+  padding-left: 0;
 }
 
 .lesson-info-transcript {

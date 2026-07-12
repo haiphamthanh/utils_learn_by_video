@@ -356,6 +356,21 @@ function lessonInfoMarkup(item) {
   return `
     <section class="lesson-info-view" data-lesson-id="${escapeHtml(item.id)}" data-inbox-id="${escapeHtml(item.inboxItemId || "")}">
       <div class="lesson-info-card">
+        <button
+          class="lesson-card-preview"
+          type="button"
+          title="Preview lesson"
+          aria-label="Preview lesson"
+          data-info-preview
+        >${libraryIconSvg("preview")}</button>
+        <button
+          class="lesson-card-favorite${item.isFavorite ? " is-active" : ""}"
+          type="button"
+          title="${item.isFavorite ? "Remove favorite" : "Add favorite"}"
+          aria-label="${item.isFavorite ? "Remove favorite" : "Add favorite"}"
+          aria-pressed="${item.isFavorite ? "true" : "false"}"
+          data-info-favorite
+        >${libraryIconSvg("heart")}</button>
         <div class="lesson-info-media">${poster}</div>
         <div class="lesson-info-body">
           <div class="lesson-card-heading lesson-info-heading">
@@ -373,15 +388,13 @@ function lessonInfoMarkup(item) {
             <span>${item.viewCount || 0} views</span>
             <span>${Number(item.noteCount || 0)} notes</span>
           </div>
-          <div class="lesson-info-actions">
-            <button class="primary-action lesson-info-preview" type="button" data-info-preview>
-              ${libraryIconSvg("preview")}
-              Preview
-            </button>
-            ${item.sourceUrl ? `<a class="source-link" href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noreferrer">Open source</a>` : ""}
-            <button class="secondary-action" type="button" data-info-metadata>Update title</button>
-          </div>
         </div>
+      </div>
+      <div class="lesson-card-actions lesson-info-card-actions">
+        ${item.sourceUrl ? `<a class="source-link" href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noreferrer">Open source</a>` : ""}
+        <button class="secondary-action metadata-action" type="button" data-info-metadata>Update title</button>
+        <button class="secondary-action regenerate-action" type="button" data-info-regenerate>Regenerate lesson</button>
+        ${lessonNotesBadgeMarkup(item.noteCount)}
       </div>
 
       <details class="lesson-transcript-preview lesson-info-transcript" open>
@@ -407,6 +420,47 @@ async function openLessonInfo(lessonId) {
   lessonInfoRoot.querySelector("[data-info-metadata]")?.addEventListener("click", () => {
     lessonInfoDialog.close();
     void openMetadataDialog(lessonId);
+  });
+
+  lessonInfoRoot.querySelector("[data-info-favorite]")?.addEventListener("click", async (event) => {
+    const btn = event.currentTarget;
+    btn.disabled = true;
+    try {
+      const progress = await updateLessonProgress(lessonId, "TOGGLE_FAVORITE");
+      item.isFavorite = Boolean(progress.isFavorite);
+      libraryLessonMap.set(lessonId, item);
+      btn.classList.toggle("is-active", item.isFavorite);
+      btn.setAttribute("aria-pressed", String(item.isFavorite));
+      btn.title = item.isFavorite ? "Remove favorite" : "Add favorite";
+      btn.setAttribute("aria-label", item.isFavorite ? "Remove favorite" : "Add favorite");
+      const cardButton = libraryLessons?.querySelector(`[data-lesson-id="${CSS.escape(lessonId)}"] [data-lesson-favorite]`);
+      if (cardButton) {
+        cardButton.classList.toggle("is-active", item.isFavorite);
+        cardButton.setAttribute("aria-pressed", String(item.isFavorite));
+        cardButton.title = item.isFavorite ? "Remove favorite" : "Add favorite";
+        cardButton.setAttribute("aria-label", item.isFavorite ? "Remove favorite" : "Add favorite");
+      }
+    } catch (error) {
+      window.alert(error.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  lessonInfoRoot.querySelector("[data-info-regenerate]")?.addEventListener("click", async (event) => {
+    const btn = event.currentTarget;
+    if (!item.inboxItemId) return;
+    btn.disabled = true;
+    btn.textContent = "Regenerating…";
+    try {
+      await startAutomaticAnalysis(item.inboxItemId);
+      window.setTimeout(() => refreshLibrary(), 2000);
+    } catch (error) {
+      window.alert(error.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Regenerate lesson";
+    }
   });
 
   await renderTranscriptEditor(item.inboxItemId, lessonInfoRoot.querySelector("[data-info-transcript]"));
