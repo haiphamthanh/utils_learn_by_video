@@ -485,19 +485,16 @@ button {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  padding: 64px 22px 22px;
+  padding: 22px;
 }
 
 .lesson-info-top-actions {
-  position: absolute;
-  top: 22px;
-  right: 22px;
-  z-index: 3;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 8px;
+  margin-bottom: 16px;
 }
 
 .lesson-info-top-actions .source-link,
@@ -538,6 +535,16 @@ button {
   position: static;
   width: 32px;
   height: 32px;
+}
+
+.lesson-info-top-actions .lesson-info-close {
+  position: static;
+  float: none;
+  width: 36px;
+  height: 32px;
+  border-radius: 999px;
+  font-size: 22px;
+  box-shadow: none;
 }
 
 .lesson-info-heading {
@@ -2078,13 +2085,8 @@ button {
   }
 
   .lesson-info-top-actions {
-    position: static;
     justify-content: flex-start;
-    padding: 14px;
-  }
-
-  .lesson-info-body {
-    padding-top: 18px;
+    margin-bottom: 14px;
   }
 
   .lesson-info-title-wrap {
