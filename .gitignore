@@ -10,7 +10,7 @@ data/
 # !data/lessons/.gitkeep
 # !data/temp/.gitkeep
 # !data/exports/.gitkeep
-# .DS_Store
+.DS_Store
 *.log
 
 .venv/

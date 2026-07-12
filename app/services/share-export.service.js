@@ -149,6 +149,6 @@ export async function createShareZip({ lessonIds, noMedia = false, outPath = nul
 
 function addMediaToZip(zip, localPath, entry) {
   if (!localPath || !fs.existsSync(localPath)) return false;
-  zip.addLocalFile(localPath, path.dirname(entry));
+  zip.addFile(entry, fs.readFileSync(localPath));
   return true;
 }

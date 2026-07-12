@@ -66,6 +66,7 @@ function importOneLesson(db, zip, manifestEntry, options = {}) {
   const lessonPath = `lessons/${slug}/lesson.json`;
   const transcriptPath = `lessons/${slug}/transcript.json`;
   const videoEntry = `lessons/${slug}/media/video.mp4`;
+  const videoEntryAlt = `lessons/${slug}/media/normalized.mp4`;
   const audioEntry = `lessons/${slug}/media/audio.wav`;
   const posterEntry = `lessons/${slug}/media/poster.jpg`;
 
@@ -109,7 +110,8 @@ function importOneLesson(db, zip, manifestEntry, options = {}) {
     normalizedAudioPath: null,
     posterPath: null
   };
-  if (extractEntry(zip, videoEntry, path.join(processedDir, "normalized.mp4"))) {
+  if (extractEntry(zip, videoEntry, path.join(processedDir, "normalized.mp4")) ||
+      extractEntry(zip, videoEntryAlt, path.join(processedDir, "normalized.mp4"))) {
     mediaPaths.normalizedVideoPath = path.join(processedDir, "normalized.mp4");
   }
   if (extractEntry(zip, audioEntry, path.join(processedDir, "audio.wav"))) {
