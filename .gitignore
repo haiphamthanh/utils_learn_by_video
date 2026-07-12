@@ -1,15 +1,16 @@
 node_modules/
 .env
-data/journal.db
-data/inbox/*
-data/lessons/*
-data/temp/*
-data/exports/*
-!data/inbox/.gitkeep
-!data/lessons/.gitkeep
-!data/temp/.gitkeep
-!data/exports/.gitkeep
-.DS_Store
+data/
+# data/journal.db
+# data/inbox/*
+# data/lessons/*
+# data/temp/*
+# data/exports/*
+# !data/inbox/.gitkeep
+# !data/lessons/.gitkeep
+# !data/temp/.gitkeep
+# !data/exports/.gitkeep
+# .DS_Store
 *.log
 
 .venv/
