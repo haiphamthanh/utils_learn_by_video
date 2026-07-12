@@ -356,21 +356,26 @@ function lessonInfoMarkup(item) {
   return `
     <section class="lesson-info-view" data-lesson-id="${escapeHtml(item.id)}" data-inbox-id="${escapeHtml(item.inboxItemId || "")}">
       <div class="lesson-info-card">
-        <button
-          class="lesson-card-preview"
-          type="button"
-          title="Preview lesson"
-          aria-label="Preview lesson"
-          data-info-preview
-        >${libraryIconSvg("preview")}</button>
-        <button
-          class="lesson-card-favorite${item.isFavorite ? " is-active" : ""}"
-          type="button"
-          title="${item.isFavorite ? "Remove favorite" : "Add favorite"}"
-          aria-label="${item.isFavorite ? "Remove favorite" : "Add favorite"}"
-          aria-pressed="${item.isFavorite ? "true" : "false"}"
-          data-info-favorite
-        >${libraryIconSvg("heart")}</button>
+        <div class="lesson-info-top-actions">
+          ${item.sourceUrl ? `<a class="source-link" href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noreferrer">Open source</a>` : ""}
+          <button class="secondary-action metadata-action" type="button" data-info-metadata>Update title</button>
+          <button class="secondary-action regenerate-action" type="button" data-info-regenerate>Regenerate lesson</button>
+          <button
+            class="lesson-card-preview"
+            type="button"
+            title="Preview lesson"
+            aria-label="Preview lesson"
+            data-info-preview
+          >${libraryIconSvg("preview")}</button>
+          <button
+            class="lesson-card-favorite${item.isFavorite ? " is-active" : ""}"
+            type="button"
+            title="${item.isFavorite ? "Remove favorite" : "Add favorite"}"
+            aria-label="${item.isFavorite ? "Remove favorite" : "Add favorite"}"
+            aria-pressed="${item.isFavorite ? "true" : "false"}"
+            data-info-favorite
+          >${libraryIconSvg("heart")}</button>
+        </div>
         <div class="lesson-info-media">${poster}</div>
         <div class="lesson-info-body">
           <div class="lesson-card-heading lesson-info-heading">
@@ -389,12 +394,6 @@ function lessonInfoMarkup(item) {
             <span>${Number(item.noteCount || 0)} notes</span>
           </div>
         </div>
-      </div>
-      <div class="lesson-card-actions lesson-info-card-actions">
-        ${item.sourceUrl ? `<a class="source-link" href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noreferrer">Open source</a>` : ""}
-        <button class="secondary-action metadata-action" type="button" data-info-metadata>Update title</button>
-        <button class="secondary-action regenerate-action" type="button" data-info-regenerate>Regenerate lesson</button>
-        ${lessonNotesBadgeMarkup(item.noteCount)}
       </div>
 
       <details class="lesson-transcript-preview lesson-info-transcript" open>

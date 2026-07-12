@@ -415,12 +415,13 @@ button {
   top: 0;
   z-index: 6;
   float: right;
-  display: grid;
-  width: 40px;
+  display: inline-flex;
+  width: 54px;
   height: 40px;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--line);
-  border-radius: 50%;
+  border-radius: 999px;
   background: color-mix(in srgb, var(--surface-strong), white 45%);
   color: var(--muted);
   font-size: 24px;
@@ -484,7 +485,59 @@ button {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  padding: 22px;
+  padding: 64px 22px 22px;
+}
+
+.lesson-info-top-actions {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.lesson-info-top-actions .source-link,
+.lesson-info-top-actions .secondary-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 0.85em;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.lesson-info-top-actions .source-link {
+  border: 1px solid var(--accent);
+  background: #f59e0b;
+  color: #fffdf8;
+}
+
+.lesson-info-top-actions .secondary-action {
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--surface), white 38%);
+  color: var(--accent-strong);
+}
+
+.lesson-info-top-actions .source-link:hover {
+  border-color: #d97706;
+  background: #d97706;
+}
+
+.lesson-info-top-actions .secondary-action:hover {
+  background: var(--accent-soft);
+}
+
+.lesson-info-top-actions .lesson-card-preview,
+.lesson-info-top-actions .lesson-card-favorite {
+  position: static;
+  width: 32px;
+  height: 32px;
 }
 
 .lesson-info-heading {
@@ -524,12 +577,6 @@ button {
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
-}
-
-.lesson-info-card-actions {
-  margin-top: 0;
-  padding-right: 0;
-  padding-left: 0;
 }
 
 .lesson-info-transcript {
@@ -2028,6 +2075,16 @@ button {
   .lesson-info-card {
     grid-template-columns: 1fr;
     padding-right: 0;
+  }
+
+  .lesson-info-top-actions {
+    position: static;
+    justify-content: flex-start;
+    padding: 14px;
+  }
+
+  .lesson-info-body {
+    padding-top: 18px;
   }
 
   .lesson-info-title-wrap {
