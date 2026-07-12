@@ -20,10 +20,6 @@
 
       <nav class="nav" aria-label="Primary">
         <button class="nav-link is-active" data-page="today">Today</button>
-        <button class="nav-link" data-page="inbox">
-          Inbox
-          <span class="count-badge" id="inbox-count">0</span>
-        </button>
         <button class="nav-link" data-page="library">Library</button>
         <button class="nav-link" data-page="journal">Journal</button>
         <button class="nav-link" data-page="share">Share</button>
@@ -49,38 +45,21 @@
         </div>
       </section>
 
-      <section id="inbox-page" class="page" hidden>
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">Save once, analyze automatically</p>
-            <h1>Inbox</h1>
-          </div>
-
-          <button class="primary-action" data-open-capture>
-            Add source
-          </button>
-        </div>
-
-        <div class="filter-row">
-          <button class="filter-chip is-active" data-status-filter="all">All</button>
-          <button class="filter-chip" data-status-filter="active">In progress</button>
-          <button class="filter-chip" data-status-filter="ready">Ready</button>
-          <button class="filter-chip" data-status-filter="attention">Needs attention</button>
-        </div>
-
-        <div id="inbox-list" class="inbox-list" aria-live="polite"></div>
-      </section>
-
       <section id="library-page" class="page" hidden>
         <div class="section-heading library-heading">
           <div>
             <p class="eyebrow">Everything worth returning to</p>
             <h1>Library</h1>
           </div>
-          <label class="library-search">
-            <span class="sr-only">Search lessons</span>
-            <input id="library-search" type="search" placeholder="Search title, transcript, phrase or journal…" />
-          </label>
+          <div class="library-heading-actions">
+            <button class="primary-action" data-open-capture>
+              Add source
+            </button>
+            <label class="library-search">
+              <span class="sr-only">Search lessons</span>
+              <input id="library-search" type="search" placeholder="Search title, transcript, phrase or journal…" />
+            </label>
+          </div>
         </div>
         <div class="filter-row">
           <button class="filter-chip is-active" data-library-status="">All</button>
@@ -181,7 +160,7 @@
         <div class="dialog-heading">
           <div>
             <p class="eyebrow">Save this moment</p>
-            <h2>Add to Inbox</h2>
+            <h2>Add to Library</h2>
           </div>
           <button class="icon-button" type="button" data-close-dialog aria-label="Close">
             ×
