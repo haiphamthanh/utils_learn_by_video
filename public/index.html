@@ -236,6 +236,46 @@
       </form>
     </dialog>
 
+    <dialog id="lesson-metadata-dialog" class="capture-dialog metadata-dialog">
+      <form id="lesson-metadata-form" method="dialog">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">Library metadata</p>
+            <div class="metadata-title-row">
+              <h2>Update lesson</h2>
+              <button class="icon-button metadata-prompt-action" type="button" id="metadata-prompt-button" aria-label="Copy AI prompt" title="Copy Prompt">
+                ⧉
+              </button>
+            </div>
+          </div>
+          <button class="icon-button" type="button" data-close-metadata aria-label="Close">
+            ×
+          </button>
+        </div>
+
+        <label>
+          <span>AI response JSON</span>
+          <textarea
+            name="metadataResponse"
+            rows="10"
+            placeholder='{"title":"...","content":"..."}'
+            required
+          ></textarea>
+        </label>
+
+        <p id="metadata-error" class="form-error" hidden></p>
+
+        <div class="dialog-actions">
+          <button class="secondary-action" type="button" data-close-metadata>
+            Cancel
+          </button>
+          <button class="primary-action" type="submit">
+            Save update
+          </button>
+        </div>
+      </form>
+    </dialog>
+
     <template id="inbox-card-template">
       <article class="inbox-card">
         <div class="inbox-card-main">

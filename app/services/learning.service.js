@@ -47,6 +47,8 @@ function getLessonRecord(lessonId) {
       l.status,
       l.lesson_json_path AS lessonJsonPath,
       l.created_at AS createdAt,
+      i.personal_note AS personalNote,
+      s.id AS sourceId,
       s.type AS sourceType,
       s.url AS sourceUrl,
       s.title AS sourceTitle,
@@ -298,6 +300,76 @@ export function getLessonDetail(lessonId) {
       audio: record.audioPath ? `/api/lessons/${lessonId}/media/audio` : null,
       poster: record.posterPath ? `/api/lessons/${lessonId}/media/poster` : null
     }
+  };
+}
+
+export function updateLessonMetadata(lessonId, payload = {}) {
+  const record = getLessonRecord(lessonId);
+  const artifact = readArtifact(record);
+  const db = getDatabase();
+  const timestamp = nowIso();
+  const title = String(payload.title ?? artifact.lesson?.title ?? record.title ?? "Lesson")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180);
+  const summaryVi = String(payload.summaryVi ?? artifact.learning?.summaryVi ?? record.summaryVi ?? "")
+    .trim()
+    .slice(0, 1200);
+  const sourceTitle = String(payload.sourceTitle ?? record.sourceTitle ?? title)
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 500);
+  const personalNote = String(payload.personalNote ?? record.personalNote ?? "")
+    .trim()
+    .slice(0, 4000);
+
+  if (!title) {
+    throw learningError("LESSON_TITLE_REQUIRED", "Lesson title is required.");
+  }
+
+  const transaction = db.transaction(() => {
+    db.prepare(`
+      UPDATE lessons
+      SET title = ?, summary_vi = ?, updated_at = ?
+      WHERE id = ?
+    `).run(title, summaryVi, timestamp, lessonId);
+
+    db.prepare(`
+      UPDATE inbox_items
+      SET personal_note = ?, updated_at = ?
+      WHERE id = ?
+    `).run(personalNote, timestamp, record.inboxItemId);
+
+    if (record.sourceId) {
+      db.prepare(`
+        UPDATE sources
+        SET title = ?
+        WHERE id = ?
+      `).run(sourceTitle || title, record.sourceId);
+    }
+  });
+
+  transaction();
+
+  artifact.lesson = {
+    ...(artifact.lesson || {}),
+    title
+  };
+  artifact.learning = {
+    ...(artifact.learning || {}),
+    summaryVi
+  };
+  artifact.source = {
+    ...(artifact.source || {}),
+    title: sourceTitle || title
+  };
+  fs.writeFileSync(record.lessonJsonPath, JSON.stringify(artifact, null, 2), "utf-8");
+
+  return {
+    title,
+    summaryVi,
+    sourceTitle: sourceTitle || title,
+    personalNote
   };
 }
 

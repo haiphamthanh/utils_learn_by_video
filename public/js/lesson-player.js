@@ -17,35 +17,16 @@ function formatTime(milliseconds) {
   return `${minutes}:${seconds}`;
 }
 
-function durationLabel(milliseconds) {
-  if (!milliseconds) return "Duration unknown";
-  const totalSeconds = Math.max(1, Math.round(Number(milliseconds) / 1000));
-  if (totalSeconds < 60) return `${totalSeconds}s`;
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return seconds ? `${minutes}m ${seconds}s` : `${minutes}m`;
-}
-
 function effectiveText(segment) {
   return segment.reviewedText || segment.cleanedText || segment.rawText || "";
 }
 
-function progressLabel(status) {
-  return {
-    NEW: "New",
-    LEARNING: "Learning",
-    MASTERED: "Mastered"
-  }[status] || status;
-}
-
-function sourceLabel(source = {}) {
-  return {
-    "facebook-reel": "Facebook Reel",
-    "youtube-short": "YouTube Short",
-    "other-url": "Web source",
-    "local-file": "Local file",
-    "uploaded-file": "Uploaded file"
-  }[source.type] || source.platform || "Source";
+function iconSvg(name) {
+  const icons = {
+    heart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.4 5.4 0 0 0-7.7 0L12 5.7l-1.1-1.1a5.4 5.4 0 0 0-7.7 7.7L12 21l8.8-8.7a5.4 5.4 0 0 0 0-7.7Z"/></svg>',
+    check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>'
+  };
+  return icons[name] || "";
 }
 
 export function createLessonPlayer({ root, onClose }) {
@@ -195,18 +176,23 @@ export function createLessonPlayer({ root, onClose }) {
   }
 
   function renderProgress() {
-    const node = root.querySelector("[data-progress-summary]");
     const toggle = root.querySelector("[data-progress-toggle]");
     const favorite = root.querySelector("[data-favorite-toggle]");
-    if (!node || !toggle || !lesson) return;
+    if (!toggle || !lesson) return;
 
     const progress = lesson.progress || {};
-    node.textContent = `${progressLabel(progress.status)} · ${progress.listenCount || 0} listens · ${progress.shadowCount || 0} loops`;
-    toggle.textContent = progress.status === "MASTERED" ? "Continue learning" : "Mark mastered";
+    const isMastered = progress.status === "MASTERED";
+    toggle.classList.toggle("is-active", isMastered);
+    toggle.setAttribute("aria-pressed", String(isMastered));
+    toggle.setAttribute("aria-label", isMastered ? "Continue learning" : "Mark mastered");
+    toggle.title = isMastered ? "Continue learning" : "Mark mastered";
+    toggle.innerHTML = iconSvg("check");
     if (favorite) {
       favorite.classList.toggle("is-active", Boolean(progress.isFavorite));
       favorite.setAttribute("aria-pressed", String(Boolean(progress.isFavorite)));
-      favorite.textContent = progress.isFavorite ? "Favorited" : "Favorite";
+      favorite.setAttribute("aria-label", progress.isFavorite ? "Remove favorite" : "Add favorite");
+      favorite.title = progress.isFavorite ? "Remove favorite" : "Add favorite";
+      favorite.innerHTML = iconSvg("heart");
     }
   }
 
@@ -348,33 +334,32 @@ export function createLessonPlayer({ root, onClose }) {
     return '<div class="lesson-empty-panel"><p>No playable media is available.</p></div>';
   }
 
+  function renderListeningNotes() {
+    return `
+      <form class="listening-notes" data-listening-notes-form>
+        <textarea name="myThought" rows="4" placeholder="Notes while listening...">${escapeHtml(lesson.journal?.myThought || "")}</textarea>
+        <div class="listening-notes-actions">
+          <span data-listening-notes-status></span>
+          <button class="secondary-action" type="submit">Save notes</button>
+        </div>
+      </form>
+    `;
+  }
+
   function render() {
     const meta = lesson.lesson || {};
     const learning = lesson.learning || {};
-    const source = lesson.source || {};
-    const mediaMeta = lesson.media || {};
 
     root.innerHTML = `
       <div class="lesson-page-header">
-        <div class="lesson-header-topline">
-          <button class="back-action" type="button" data-close-lesson>Back</button>
-          ${source.url ? `<a class="source-link lesson-source-link" href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer">Open source</a>` : ""}
-        </div>
         <div class="lesson-header-main">
           <div class="lesson-title-block">
-            <div class="lesson-meta-row">
-              <span>${escapeHtml(sourceLabel(source))}</span>
-              <span>${escapeHtml(meta.topic || "Personal learning")}</span>
-              <span>${escapeHtml(meta.difficulty || "UNRATED")}</span>
-              <span>${escapeHtml(durationLabel(mediaMeta.durationMs))}</span>
-            </div>
             <h1>${escapeHtml(meta.title || "Lesson")}</h1>
-            <p>${escapeHtml(learning.summaryVi || "Practice this lesson with synced transcript, phrases, and journal notes.")}</p>
+            <p>${escapeHtml(learning.summaryVi || "")}</p>
           </div>
-          <div class="lesson-progress-box">
-            <span data-progress-summary></span>
-            <button class="secondary-action favorite-action" type="button" data-favorite-toggle aria-pressed="false"></button>
-            <button class="secondary-action" type="button" data-progress-toggle></button>
+          <div class="lesson-header-actions">
+            <button class="lesson-icon-action favorite-action" type="button" data-favorite-toggle aria-pressed="false"></button>
+            <button class="lesson-icon-action mastered-action" type="button" data-progress-toggle aria-pressed="false"></button>
           </div>
         </div>
       </div>
@@ -395,6 +380,7 @@ export function createLessonPlayer({ root, onClose }) {
             </div>
           </div>
           <p class="player-hint">Choose a sentence, then use Loop ×3 for focused listening and shadowing.</p>
+          ${renderListeningNotes()}
         </section>
 
         <section class="learning-column">
@@ -427,12 +413,6 @@ export function createLessonPlayer({ root, onClose }) {
   }
 
   function bindEvents() {
-    root.querySelector("[data-close-lesson]")?.addEventListener("click", () => {
-      media?.pause();
-      stopLoop();
-      onClose();
-    });
-
     for (const button of root.querySelectorAll("[data-lesson-tab]")) {
       button.addEventListener("click", () => switchTab(button.dataset.lessonTab));
     }
@@ -498,24 +478,33 @@ export function createLessonPlayer({ root, onClose }) {
       const submit = form.querySelector("button[type='submit']");
       const data = new FormData(form);
 
-      submit.disabled = true;
-      status.textContent = "Saving…";
-      try {
-        lesson.journal = await updateLessonJournal(lesson.lesson.id, {
-          whyISavedThis: data.get("whyISavedThis"),
-          myThought: data.get("myThought"),
-          favoritePhrase: data.get("favoritePhrase"),
-          myExample: data.get("myExample")
-        });
-        status.textContent = "Saved";
-        window.setTimeout(() => {
-          status.textContent = "";
-        }, 1200);
-      } catch (error) {
-        status.textContent = error.message;
-      } finally {
-        submit.disabled = false;
-      }
+      await saveJournalPatch({
+        whyISavedThis: data.get("whyISavedThis"),
+        myThought: data.get("myThought"),
+        favoritePhrase: data.get("favoritePhrase"),
+        myExample: data.get("myExample")
+      }, { status, submit });
+    });
+
+    root.querySelector("[data-listening-notes-form]")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const status = form.querySelector("[data-listening-notes-status]");
+      const submit = form.querySelector("button[type='submit']");
+      const data = new FormData(form);
+
+      await saveJournalPatch({
+        myThought: data.get("myThought")
+      }, { status, submit });
+    });
+
+    root.querySelector("[data-listening-notes-form] textarea")?.addEventListener("blur", (event) => {
+      const value = event.currentTarget.value;
+      if (value === (lesson.journal?.myThought || "")) return;
+      const form = root.querySelector("[data-listening-notes-form]");
+      const status = form?.querySelector("[data-listening-notes-status]");
+      const submit = form?.querySelector("button[type='submit']");
+      void saveJournalPatch({ myThought: value }, { status, submit });
     });
 
     if (media) {
@@ -536,6 +525,38 @@ export function createLessonPlayer({ root, onClose }) {
 
     const first = segments()[0];
     if (first) setSelectedSegment(first.id);
+  }
+
+  async function saveJournalPatch(payload, { status, submit } = {}) {
+    if (submit) submit.disabled = true;
+    if (status) status.textContent = "Saving...";
+    try {
+      lesson.journal = await updateLessonJournal(lesson.lesson.id, {
+        ...(lesson.journal || {}),
+        ...payload
+      });
+
+      const notes = root.querySelector("[data-listening-notes-form] textarea");
+      if (notes && notes.value !== (lesson.journal.myThought || "")) {
+        notes.value = lesson.journal.myThought || "";
+      }
+      const journalThought = root.querySelector("[data-journal-form] textarea[name='myThought']");
+      if (journalThought && journalThought.value !== (lesson.journal.myThought || "")) {
+        journalThought.value = lesson.journal.myThought || "";
+      }
+
+      if (status) {
+        status.textContent = "Saved";
+        window.setTimeout(() => {
+          if (status.textContent === "Saved") status.textContent = "";
+        }, 1200);
+      }
+    } catch (error) {
+      if (status) status.textContent = error.message;
+      else window.alert(error.message);
+    } finally {
+      if (submit) submit.disabled = false;
+    }
   }
 
   async function open(lessonId) {

@@ -14,7 +14,9 @@ import {
   importShareZip,
   listExportableLessons,
   listJournalEntries,
+  getLessonDetail,
   getJournalOverview,
+  updateLessonMetadata,
   updateLessonProgress
 } from "./api.js";
 import { createLessonPlayer } from "./lesson-player.js";
@@ -61,6 +63,10 @@ const shareExportSelected = document.querySelector("#share-export-selected");
 const shareImportInput = document.querySelector("#share-import-input");
 const shareImportLabel = document.querySelector("#share-import-label");
 const shareActionStatus = document.querySelector("#share-action-status");
+const metadataDialog = document.querySelector("#lesson-metadata-dialog");
+const metadataForm = document.querySelector("#lesson-metadata-form");
+const metadataError = document.querySelector("#metadata-error");
+const metadataPromptButton = document.querySelector("#metadata-prompt-button");
 
 let shareLessonData = [];
 let shareSelectedIds = new Set();
@@ -69,6 +75,7 @@ let currentShareStatus = "";
 let journalOverviewCache = null;
 let librarySearchTimer = null;
 let returnPageAfterLesson = "library";
+let metadataEditingLesson = null;
 
 const lessonPlayer = createLessonPlayer({
   root: lessonPlayerRoot,
@@ -180,6 +187,7 @@ function lessonCardMarkup(item) {
       </button>
       <div class="lesson-card-actions">
         ${item.sourceUrl ? `<a class="source-link" href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noreferrer">Open source</a>` : ""}
+        <button class="secondary-action metadata-action" type="button" data-lesson-metadata>Update title</button>
         <button class="secondary-action regenerate-action" type="button" data-lesson-regenerate>Regenerate lesson</button>
       </div>
       <details class="lesson-transcript-preview">
@@ -306,7 +314,96 @@ function bindLibraryCards(container) {
       }
     });
 
+    card.querySelector("[data-lesson-metadata]")?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      void openMetadataDialog(card.dataset.lessonId);
+    });
+
     loadTranscriptForCard(card);
+  }
+}
+
+function transcriptText(lessonDetail) {
+  return (lessonDetail.transcript?.segments || [])
+    .map((segment) => {
+      const text = segment.reviewedText || segment.cleanedText || segment.rawText || "";
+      return `[${formatTime(segment.startMs)}] ${text}`;
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+function buildMetadataPrompt(lessonDetail) {
+  const title = lessonDetail.lesson?.title || "";
+  const summary = lessonDetail.learning?.summaryVi || "";
+  const script = transcriptText(lessonDetail);
+
+  return `You are helping update metadata for a personal English listening lesson.
+
+Goal:
+- Create a concise, specific title.
+- Create a useful description/content summary for the learner.
+- Base the result only on the transcript.
+- Avoid generic titles such as "Facebook", "Facebook Reel", "Personal learning", or "Lesson".
+
+Current metadata:
+Title: ${title}
+Description: ${summary}
+
+Transcript:
+${script || "(No transcript available)"}
+
+Return ONLY valid JSON with this exact structure:
+{
+  "title": "A specific lesson title, max 90 characters",
+  "content": "A learner-facing description in Vietnamese, 1-3 sentences, max 500 characters"
+}
+
+Rules:
+- Do not include markdown fences.
+- Do not add extra keys.
+- Use natural Vietnamese for "content".
+- The title may be English if the key phrase is English; otherwise use Vietnamese.`;
+}
+
+async function copyText(value) {
+  if (navigator.clipboard) {
+    const copied = await navigator.clipboard.writeText(value).then(() => true).catch(() => false);
+    if (copied) return true;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.append(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  return copied;
+}
+
+function parseMetadataResponse(value) {
+  const trimmed = String(value || "").trim()
+    .replace(/^```(?:json)?/i, "")
+    .replace(/```$/i, "")
+    .trim();
+  return JSON.parse(trimmed);
+}
+
+async function openMetadataDialog(lessonId) {
+  if (!metadataDialog || !metadataForm) return;
+  metadataError.hidden = true;
+  metadataError.textContent = "";
+  metadataForm.reset();
+  metadataDialog.showModal();
+
+  try {
+    metadataEditingLesson = await getLessonDetail(lessonId);
+  } catch (error) {
+    metadataError.hidden = false;
+    metadataError.textContent = error.message;
   }
 }
 
@@ -1107,6 +1204,67 @@ shareImportInput?.addEventListener("change", async () => {
     window.setTimeout(() => {
       shareActionStatus.textContent = "";
     }, 6000);
+  }
+});
+
+for (const button of document.querySelectorAll("[data-close-metadata]")) {
+  button.addEventListener("click", () => {
+    metadataDialog?.close();
+    metadataEditingLesson = null;
+  });
+}
+
+metadataDialog?.addEventListener("click", (event) => {
+  if (event.target === metadataDialog) {
+    metadataDialog.close();
+    metadataEditingLesson = null;
+  }
+});
+
+metadataPromptButton?.addEventListener("click", async () => {
+  if (!metadataEditingLesson) return;
+  const prompt = buildMetadataPrompt(metadataEditingLesson);
+  const copied = await copyText(prompt);
+  metadataPromptButton.title = copied ? "Prompt copied" : "Copy failed";
+  metadataPromptButton.classList.toggle("is-copied", copied);
+  window.setTimeout(() => {
+    metadataPromptButton.title = "Copy Prompt";
+    metadataPromptButton.classList.remove("is-copied");
+  }, 1600);
+});
+
+metadataForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!metadataEditingLesson) return;
+
+  const submit = metadataForm.querySelector("button[type='submit']");
+  metadataError.hidden = true;
+  metadataError.textContent = "";
+  submit.disabled = true;
+  submit.textContent = "Saving...";
+
+  try {
+    const parsed = parseMetadataResponse(metadataForm.elements.metadataResponse.value);
+    const title = String(parsed.title || "").trim();
+    const content = String(parsed.content || "").trim();
+    if (!title || !content) {
+      throw new Error('Paste JSON with both "title" and "content".');
+    }
+
+    await updateLessonMetadata(metadataEditingLesson.lesson.id, {
+      title,
+      summaryVi: content,
+      sourceTitle: title
+    });
+    metadataDialog?.close();
+    metadataEditingLesson = null;
+    await refreshLibrary();
+  } catch (error) {
+    metadataError.hidden = false;
+    metadataError.textContent = error.message;
+  } finally {
+    submit.disabled = false;
+    submit.textContent = "Save update";
   }
 });
 

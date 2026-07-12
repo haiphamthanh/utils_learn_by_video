@@ -6,7 +6,8 @@ import {
   getLessonMedia,
   listLessons,
   recordLessonProgress,
-  updateLessonJournal
+  updateLessonJournal,
+  updateLessonMetadata
 } from "../services/learning.service.js";
 
 function sendMedia(req, res, media) {
@@ -80,6 +81,17 @@ export function createLessonsRouter() {
     try {
       res.json({
         data: updateLessonJournal(req.params.id, req.body),
+        error: null
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.patch("/:id/metadata", (req, res, next) => {
+    try {
+      res.json({
+        data: updateLessonMetadata(req.params.id, req.body),
         error: null
       });
     } catch (error) {

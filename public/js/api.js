@@ -86,6 +86,14 @@ export function updateLessonJournal(lessonId, payload) {
   });
 }
 
+export function updateLessonMetadata(lessonId, payload) {
+  return request(`/api/lessons/${lessonId}/metadata`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+}
+
 export function updateLessonProgress(lessonId, action) {
   return request(`/api/lessons/${lessonId}/progress`, {
     method: "POST",
