@@ -94,10 +94,6 @@
         <div id="library-lessons" class="lesson-card-grid" aria-live="polite"></div>
       </section>
 
-      <section id="lesson-page" class="page" hidden>
-        <div id="lesson-player-root"></div>
-      </section>
-
       <section id="share-page" class="page" hidden>
         <div class="section-heading share-page-heading">
           <h1>Share</h1>
@@ -186,6 +182,13 @@
         </div>
       </section>
     </main>
+
+    <dialog id="lesson-dialog" class="lesson-dialog">
+      <div class="lesson-dialog-shell">
+        <button class="lesson-dialog-close" type="button" data-close-lesson aria-label="Close lesson">×</button>
+        <div id="lesson-player-root"></div>
+      </div>
+    </dialog>
 
     <dialog id="stats-dialog" class="capture-dialog">
       <div class="dialog-heading">

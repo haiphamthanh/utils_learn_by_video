@@ -52,6 +52,7 @@ if (statsDialog) {
   }
 }
 const lessonPlayerRoot = document.querySelector("#lesson-player-root");
+const lessonDialog = document.querySelector("#lesson-dialog");
 const shareExportsList = document.querySelector("#share-exports-list");
 const shareRegistryList = document.querySelector("#share-registry-list");
 const shareRefreshExports = document.querySelector("#share-refresh-exports");
@@ -75,16 +76,31 @@ let currentLibraryStatus = "";
 let currentLibraryFavorite = false;
 let journalOverviewCache = null;
 let librarySearchTimer = null;
-let returnPageAfterLesson = "library";
 let metadataEditingLesson = null;
 
 const lessonPlayer = createLessonPlayer({
   root: lessonPlayerRoot,
-  onClose: () => showPage(returnPageAfterLesson)
+  onClose: () => lessonDialog?.close()
 });
 
+function closeLessonDialog() {
+  lessonDialog?.close();
+}
+
+if (lessonDialog) {
+  lessonDialog.addEventListener("click", (event) => {
+    if (event.target === lessonDialog) closeLessonDialog();
+  });
+  lessonDialog.addEventListener("close", () => {
+    lessonPlayer.reset();
+    if (lessonPlayerRoot) lessonPlayerRoot.innerHTML = "";
+  });
+  document.querySelector("[data-close-lesson]")?.addEventListener("click", closeLessonDialog);
+}
+
 function showPage(pageName, { updateUrl = true } = {}) {
-  if (pageName !== "lesson") lessonPlayer.reset();
+  if (lessonDialog?.open) lessonDialog.close();
+  lessonPlayer.reset();
 
   pages.forEach((page) => {
     page.hidden = page.id !== `${pageName}-page`;
@@ -105,8 +121,7 @@ function showPage(pageName, { updateUrl = true } = {}) {
 }
 
 async function openLesson(lessonId, returnPage = "library") {
-  returnPageAfterLesson = returnPage;
-  showPage("lesson");
+  if (!lessonDialog?.open) lessonDialog?.showModal();
   try {
     await lessonPlayer.open(lessonId);
   } catch (error) {
@@ -114,11 +129,11 @@ async function openLesson(lessonId, returnPage = "library") {
       <div class="empty-card">
         <h3>Lesson could not be opened</h3>
         <p>${escapeHtml(error.message)}</p>
-        <button class="secondary-action" type="button" data-lesson-error-back>Back</button>
+        <button class="secondary-action" type="button" data-lesson-error-back>Close</button>
       </div>
     `;
     lessonPlayerRoot.querySelector("[data-lesson-error-back]")?.addEventListener("click", () => {
-      showPage(returnPageAfterLesson);
+      lessonDialog?.close();
     });
   }
 }
