@@ -93,3 +93,43 @@ export function updateLessonProgress(lessonId, action) {
     body: JSON.stringify({ action })
   });
 }
+
+export function listShareRegistry(status = "") {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  return request(`/api/share/registry${query}`);
+}
+
+export function listShareExports() {
+  return request("/api/share/exports");
+}
+
+export function deleteShareExport(filename) {
+  return request(`/api/share/exports/${encodeURIComponent(filename)}`, { method: "DELETE" });
+}
+
+export function restoreShareTombstone(slug) {
+  return request(`/api/share/registry/${encodeURIComponent(slug)}/restore`, { method: "POST" });
+}
+
+export function createShareExport(payload = {}) {
+  return request("/api/share/exports", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+}
+
+export function getShareExportDownloadUrl(filename) {
+  return `/api/share/exports/${encodeURIComponent(filename)}/download`;
+}
+
+export function importShareZip(file, dryRun = false) {
+  const body = new FormData();
+  body.append("file", file);
+  if (dryRun) body.append("dryRun", "true");
+  return request("/api/share/imports", { method: "POST", body });
+}
+
+export function listExportableLessons() {
+  return request("/api/share/exportable");
+}

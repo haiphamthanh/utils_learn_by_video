@@ -172,6 +172,24 @@ CREATE TABLE IF NOT EXISTS learning_progress (
   FOREIGN KEY(lesson_id) REFERENCES lessons(id)
 );
 
+-- Lightweight registry for the share/import workflow.
+-- One row per lesson identity (slug) so we can remember that a lesson is
+-- either already imported locally or has been intentionally deleted and
+-- should be ignored on future imports. The key is a deterministic slug
+-- derived from the lesson title + source URL so it stays stable across
+-- machines and is independent of local database IDs.
+CREATE TABLE IF NOT EXISTS share_registry (
+  slug TEXT PRIMARY KEY,
+  title TEXT,
+  source_url TEXT,
+  inbox_item_id TEXT,
+  lesson_id TEXT,
+  deleted INTEGER NOT NULL DEFAULT 0,
+  imported_at TEXT NOT NULL,
+  last_exported_at TEXT,
+  updated_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_inbox_status
   ON inbox_items(status);
 
@@ -213,4 +231,7 @@ CREATE INDEX IF NOT EXISTS idx_journal_content
 
 CREATE INDEX IF NOT EXISTS idx_learning_progress_status
   ON learning_progress(learning_status, last_opened_at);
+
+CREATE INDEX IF NOT EXISTS idx_share_registry_deleted
+  ON share_registry(deleted, updated_at DESC);
 `;

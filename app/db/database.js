@@ -12,7 +12,8 @@ function ensureDataDirectories() {
     config.dataDir,
     path.join(config.dataDir, "inbox"),
     path.join(config.dataDir, "lessons"),
-    path.join(config.dataDir, "temp")
+    path.join(config.dataDir, "temp"),
+    path.join(config.dataDir, "exports")
   ]) {
     fs.mkdirSync(directory, { recursive: true });
   }
@@ -27,6 +28,12 @@ export function initializeDatabase() {
   db = new Database(databasePath);
   db.pragma("journal_mode = WAL");
   db.exec(schemaSql);
+
+  try {
+    db.exec("ALTER TABLE share_registry ADD COLUMN last_exported_at TEXT");
+  } catch {
+    // column already exists — safe to ignore
+  }
 
   return db;
 }

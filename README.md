@@ -6,7 +6,7 @@ A local-first application for saving meaningful short videos and turning them in
 
 ## Current Version
 
-**v0.7.1 — Automatic URL-to-Lesson Pipeline**
+**v0.8.0 — Share Lessons Between Machines (zip + Google Drive)**
 
 ```text
 Click browser extension
@@ -58,6 +58,10 @@ Manual media upload remains only as a fallback when a source cannot be imported 
 | Automatic URL media acquisition                     | Done   |
 | Automatic media → transcript → lesson orchestration | Done   |
 | Manual upload fallback                              | Done   |
+| Share lessons via zip + Google Drive               | Done   |
+| Cross-machine import with slug-based deduplication | Done   |
+| Tombstone for deleted lessons                       | Done   |
+| Share management UI                                 | Done   |
 
 ## Quick Start
 
@@ -103,6 +107,107 @@ yarn backup:check
 ```
 
 The setup step creates a local config at `~/.config/enjoy-journal/backup.env` and a local password file at `~/.config/enjoy-journal/restic-password`. Edit the env file with your Backblaze key ID, application key, bucket name and S3 endpoint before the first backup.
+
+## Share Lessons Between Machines (UI + Google Drive)
+
+A simple workflow for moving lessons between machines without any cloud credentials
+inside the app.
+
+```text
+This machine                            Another machine
+   Click "Export all lessons"               Click "Import zip"
+        ↓                                         ↓
+   Download .zip file                       Upload the .zip file
+        ↓                                         ↓
+   Upload to Google Drive                   Lessons appear instantly
+```
+
+### 1. Export lessons (Web UI)
+
+Open the **Share** page (`http://localhost:3000/?page=share`) and click **Export
+all lessons**. This creates a zip file with everything (media, transcript,
+lesson data) and lists it under the Exports section. Click **Download .zip** to
+save it locally, then upload it to Google Drive.
+
+You can also export from the command line:
+
+```bash
+yarn share:export              # all lessons
+yarn share:export --no-media    # skip media files (smaller zip)
+```
+
+### 2. Upload to Google Drive
+
+Manual step: upload the downloaded zip to Google Drive (or any cloud storage).
+
+### 3. Import on the other machine (Web UI)
+
+On the machine that should receive the lessons:
+
+```bash
+./start.sh     # first time only, to migrate the db with share_registry
+```
+
+Then open the **Share** page, click the **Import zip** dashed button, and select
+the downloaded zip file. The import runs immediately and reports results:
+imported / skipped-existing / skipped-deleted.
+
+You can also import from the command line:
+
+```bash
+yarn share:import path/to/enjoy-journal-*.zip
+yarn share:import path/to/enjoy-journal-*.zip --dry-run   # preview only
+```
+
+### Import behavior
+
+For each lesson in the zip the importer computes its **slug** (derived from title
++ source URL) and checks the local `share_registry` table:
+
+```text
+slug already exists and is marked deleted    -> skip (tombstoned)
+slug already exists and has a local inbox    -> skip (already have it)
+slug unknown                                 -> import fully (source, media, transcript, lesson, journal, progress)
+```
+
+Importing the same zip twice, or importing a zip with previously deleted lessons,
+**is always safe**.
+
+### Managing the share registry
+
+The Share page shows a **Registry** section with every lesson slug this machine
+has seen (Available / Deleted / All). When you delete a lesson locally its slug
+is kept with a `deleted` flag so the same lesson is never re-imported by accident.
+
+If you intentionally want to re-import a tombstoned lesson, click **Restore
+eligibility** next to it in the Registry, then run the import again.
+
+### Share API
+
+```http
+GET  /api/share/registry                      # list registry entries
+POST /api/share/exports                        # create a new export zip
+GET  /api/share/exports/:filename/download     # download an export zip
+DELETE /api/share/exports/:filename             # remove an export zip
+POST /api/share/imports                        # upload and import a zip (multipart file)
+POST /api/share/registry/:slug/restore         # clear the deleted flag
+```
+
+### Zip format reference
+
+```text
+enjoy-journal-<timestamp>.zip
+├── manifest.json
+└── lessons/
+    └── <slug>/
+        ├── meta.json         # title, source, personalNote, provider/model
+        ├── lesson.json       # sanitized lesson artifact (media paths stripped)
+        ├── transcript.json   # language + segments (raw/cleaned/reviewed)
+        └── media/
+            ├── video.mp4     # optional
+            ├── audio.wav     # optional
+            └── poster.jpg    # optional
+```
 
 ## Main Product Flow
 

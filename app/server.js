@@ -7,6 +7,7 @@ import { initializeDatabase } from "./db/database.js";
 import { createInboxRouter } from "./routes/inbox.routes.js";
 import { createLessonsRouter } from "./routes/lessons.routes.js";
 import { createHealthRouter } from "./routes/health.routes.js";
+import { createShareRouter } from "./routes/share.routes.js";
 import { recoverInterruptedAcquisitionJobs } from "./services/automation.service.js";
 import { recoverInterruptedProcessingJobs } from "./services/pipeline.service.js";
 import { recoverInterruptedTranscriptionJobs } from "./services/transcription.service.js";
@@ -40,6 +41,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api/health", createHealthRouter());
 app.use("/api/inbox", createInboxRouter());
 app.use("/api/lessons", createLessonsRouter());
+app.use("/api/share", createShareRouter());
 app.use(express.static(path.resolve(__dirname, "../public")));
 
 app.use((req, res, next) => {
@@ -66,4 +68,13 @@ app.listen(config.port, () => {
   console.log(`Automatic URL analysis: ${config.autoProcessUrls ? "enabled" : "disabled"}`);
   console.log(`Transcription provider: ${config.transcriptionProvider}`);
   console.log(`Lesson provider: ${config.lessonProvider}`);
+
+  setImmediate(async () => {
+    try {
+      const { rebuildLastExportedMarks } = await import("./services/share.service.js");
+      await rebuildLastExportedMarks();
+    } catch {
+      // non-critical
+    }
+  });
 });

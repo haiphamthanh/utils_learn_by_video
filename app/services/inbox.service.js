@@ -5,6 +5,7 @@ import path from "node:path";
 import { config } from "../config.js";
 
 import { getDatabase } from "../db/database.js";
+import { buildSlug, recordTombstone } from "./share.service.js";
 
 const ALLOWED_SOURCE_TYPES = new Set([
   "facebook-reel",
@@ -326,9 +327,25 @@ export function deleteInboxItem(inboxItemId) {
     );
   }
 
-  const lessonIds = db.prepare("SELECT id FROM lessons WHERE inbox_item_id = ?")
-    .all(inboxItemId)
-    .map((row) => row.id);
+  const lessonsToDelete = db.prepare(`
+    SELECT l.id AS lessonId, l.title, s.url AS sourceUrl
+    FROM lessons l
+    JOIN inbox_items i ON i.id = l.inbox_item_id
+    LEFT JOIN sources s ON s.id = i.source_id
+    WHERE l.inbox_item_id = ?
+  `).all(inboxItemId);
+
+  const lessonIds = lessonsToDelete.map((row) => row.lessonId);
+
+  const tombstoneEntries = lessonsToDelete
+    .map((row) => ({
+      slug: buildSlug({ title: row.title, sourceUrl: row.sourceUrl }),
+      title: row.title,
+      sourceUrl: row.sourceUrl
+    }))
+    .filter((entry, index, self) =>
+      entry.slug && self.findIndex((other) => other.slug === entry.slug) === index
+    );
 
   const transcriptIds = target.mediaAssetId
     ? db.prepare("SELECT id FROM transcripts WHERE media_asset_id = ?")
@@ -337,6 +354,10 @@ export function deleteInboxItem(inboxItemId) {
     : [];
 
   const transaction = db.transaction(() => {
+    for (const entry of tombstoneEntries) {
+      recordTombstone({ slug: entry.slug, title: entry.title, sourceUrl: entry.sourceUrl });
+    }
+
     for (const lessonId of lessonIds) {
       db.prepare("DELETE FROM journal_entries WHERE lesson_id = ?").run(lessonId);
       db.prepare("DELETE FROM learning_progress WHERE lesson_id = ?").run(lessonId);

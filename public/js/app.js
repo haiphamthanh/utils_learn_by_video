@@ -10,7 +10,15 @@ import {
   startAutomaticAnalysis,
   transcribeMedia,
   updateTranscriptSegment,
-  uploadMedia
+  uploadMedia,
+  listShareRegistry,
+  listShareExports,
+  deleteShareExport,
+  restoreShareTombstone,
+  createShareExport,
+  getShareExportDownloadUrl,
+  importShareZip,
+  listExportableLessons
 } from "./api.js";
 import { createLessonPlayer } from "./lesson-player.js";
 
@@ -28,9 +36,25 @@ const libraryLessons = document.querySelector("#library-lessons");
 const librarySearch = document.querySelector("#library-search");
 const libraryStatusFilters = [...document.querySelectorAll("[data-library-status]")];
 const lessonPlayerRoot = document.querySelector("#lesson-player-root");
+const shareExportsList = document.querySelector("#share-exports-list");
+const shareRegistryList = document.querySelector("#share-registry-list");
+const shareRefreshExports = document.querySelector("#share-refresh-exports");
+const shareStatusFilters = [...document.querySelectorAll("[data-share-status]")];
+const shareLessonList = document.querySelector("#share-lesson-list");
+const shareHideExported = document.querySelector("#share-hide-exported");
+const shareSelectAll = document.querySelector("#share-select-all");
+const shareDeselectAll = document.querySelector("#share-deselect-all");
+const shareExportSelected = document.querySelector("#share-export-selected");
+const shareImportInput = document.querySelector("#share-import-input");
+const shareImportLabel = document.querySelector("#share-import-label");
+const shareActionStatus = document.querySelector("#share-action-status");
+
+let shareLessonData = [];
+let shareSelectedIds = new Set();
 
 let currentStatusFilter = "all";
 let currentLibraryStatus = "";
+let currentShareStatus = "";
 let activePollTimer = null;
 let librarySearchTimer = null;
 let returnPageAfterLesson = "library";
@@ -80,6 +104,7 @@ function showPage(pageName, { updateUrl = true } = {}) {
   if (pageName === "today") void refreshToday();
   if (pageName === "inbox") void refreshInbox();
   if (pageName === "library") void refreshLibrary();
+  if (pageName === "share") void refreshShare();
 }
 
 async function openLesson(lessonId, returnPage = "library") {
@@ -764,5 +789,320 @@ captureForm.addEventListener("submit", async (event) => {
 });
 
 const initialPage = new URLSearchParams(window.location.search).get("page");
-const supportedInitialPages = new Set(["today", "inbox", "library", "journal"]);
+const supportedInitialPages = new Set(["today", "inbox", "library", "journal", "share"]);
 showPage(supportedInitialPages.has(initialPage) ? initialPage : "today", { updateUrl: false });
+
+function bytesLabel(value) {
+  const units = ["B", "KB", "MB", "GB"];
+  let size = Number(value || 0);
+  let index = 0;
+  while (size >= 1024 && index < units.length - 1) {
+    size /= 1024;
+    index += 1;
+  }
+  return `${size.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+async function refreshShare() {
+  await Promise.all([
+    void refreshShareExports(),
+    void refreshShareRegistry(),
+    void refreshShareLessonList()
+  ]);
+}
+
+async function refreshShareExports() {
+  if (!shareExportsList) return;
+  shareExportsList.innerHTML = '<div class="empty-card"><p>Loading exports…</p></div>';
+  try {
+    const entries = await listShareExports();
+    if (!entries.length) {
+      shareExportsList.innerHTML = `
+        <article class="inbox-card">
+          <div class="inbox-card-main">
+            <p class="muted-copy">No exports yet. Click "Export all lessons" above.</p>
+          </div>
+        </article>
+      `;
+      return;
+    }
+    shareExportsList.innerHTML = entries.map((entry) => `
+      <article class="inbox-card" data-share-export="${escapeHtml(entry.filename)}">
+        <div class="inbox-card-main">
+          <div class="inbox-meta">
+            <span class="source-label">${escapeHtml(entry.filename)}</span>
+            <span class="status-badge">${bytesLabel(entry.size)}</span>
+          </div>
+          <p class="source-note">Created ${escapeHtml(new Date(entry.createdAt).toLocaleString())}</p>
+        </div>
+        <div class="inbox-card-action">
+          <a class="process-action" type="button" data-share-export-download href="${getShareExportDownloadUrl(entry.filename)}" download>Download .zip</a>
+          <button class="delete-source-action" type="button" data-share-export-delete>Delete export</button>
+        </div>
+      </article>
+    `).join("");
+
+    for (const card of shareExportsList.querySelectorAll("[data-share-export]")) {
+      const filename = card.dataset.shareExport;
+      card.querySelector("[data-share-export-delete]")?.addEventListener("click", async () => {
+        if (!window.confirm(`Delete ${filename}? This only removes the local zip.`)) return;
+        try {
+          await deleteShareExport(filename);
+          await Promise.all([refreshShareExports(), refreshShareLessonList()]);
+        } catch (error) {
+          window.alert(error.message);
+        }
+      });
+    }
+  } catch (error) {
+    shareExportsList.innerHTML = `
+      <div class="empty-card">
+        <h3>Exports could not be loaded</h3>
+        <p>${escapeHtml(error.message)}</p>
+      </div>
+    `;
+  }
+}
+
+async function refreshShareRegistry() {
+  if (!shareRegistryList) return;
+  shareRegistryList.innerHTML = '<div class="empty-card"><p>Loading registry…</p></div>';
+  try {
+    const entries = await listShareRegistry(currentShareStatus);
+    if (!entries.length) {
+      shareRegistryList.innerHTML = `
+        <article class="inbox-card">
+          <div class="inbox-card-main">
+            <p class="muted-copy">
+              No entries yet. This fills automatically when you export, import, or delete lessons.
+            </p>
+          </div>
+        </article>
+      `;
+      return;
+    }
+
+    shareRegistryList.innerHTML = entries.map((entry) => {
+      const statusLabel = entry.deleted
+        ? '<span class="status-badge">Deleted</span>'
+        : entry.inboxItemId
+          ? '<span class="status-badge">Available</span>'
+          : '<span class="status-badge">Missing</span>';
+      const slug = entry.slug && entry.slug.length > 60
+        ? `${entry.slug.slice(0, 60)}…`
+        : entry.slug;
+      return `
+        <article class="inbox-card" data-share-slug="${escapeHtml(entry.slug)}">
+          <div class="inbox-card-main">
+            <div class="inbox-meta">
+              <span class="source-label">${escapeHtml(entry.title || "Untitled")}</span>
+              ${statusLabel}
+            </div>
+            <p class="source-note">${escapeHtml(entry.sourceUrl || "No source URL")}</p>
+            <p class="source-note">Slug: <code>${escapeHtml(slug)}</code></p>
+          </div>
+          <div class="inbox-card-action">
+            ${entry.deleted
+              ? '<button class="auto-action" type="button" data-share-restore>Restore eligibility</button>'
+              : '<span class="muted-copy">No action needed</span>'}
+          </div>
+        </article>
+      `;
+    }).join("");
+
+    for (const card of shareRegistryList.querySelectorAll("[data-share-slug]")) {
+      const slug = card.dataset.shareSlug;
+      card.querySelector("[data-share-restore]")?.addEventListener("click", async () => {
+        if (!window.confirm(`Allow "${slug}" to be imported again?`)) return;
+        try {
+          await restoreShareTombstone(slug);
+          await refreshShareRegistry();
+        } catch (error) {
+          window.alert(error.message);
+        }
+      });
+    }
+  } catch (error) {
+    shareRegistryList.innerHTML = `
+      <div class="empty-card">
+        <h3>Registry could not be loaded</h3>
+        <p>${escapeHtml(error.message)}</p>
+      </div>
+    `;
+  }
+}
+
+for (const filter of shareStatusFilters) {
+  filter.addEventListener("click", async () => {
+    currentShareStatus = filter.dataset.shareStatus;
+    shareStatusFilters.forEach((item) => {
+      item.classList.toggle("is-active", item === filter);
+    });
+    await refreshShareRegistry();
+  });
+}
+
+shareRefreshExports?.addEventListener("click", () => {
+  void refreshShareExports();
+});
+
+async function refreshShareLessonList() {
+  if (!shareLessonList) return;
+  shareLessonList.innerHTML = '<div class="empty-card"><p>Loading lessons…</p></div>';
+  try {
+    shareLessonData = await listExportableLessons();
+    const hideExported = shareHideExported?.checked ?? true;
+
+    const visible = hideExported
+      ? shareLessonData.filter((l) => !l.alreadyExported)
+      : shareLessonData;
+
+    if (!shareLessonData.length) {
+      shareLessonList.innerHTML = `
+        <article class="inbox-card">
+          <div class="inbox-card-main">
+            <p class="muted-copy">No lessons ready. Generate a lesson first.</p>
+          </div>
+        </article>
+      `;
+      return;
+    }
+
+    if (hideExported && !visible.length) {
+      shareLessonList.innerHTML = `
+        <article class="inbox-card">
+          <div class="inbox-card-main">
+            <p class="muted-copy">All lessons already exported. Uncheck "Hide already exported" to re-export.</p>
+          </div>
+        </article>
+      `;
+    }
+
+    shareSelectedIds = new Set(
+      [...shareSelectedIds].filter((id) => visible.some((l) => l.lessonId === id))
+    );
+
+    shareLessonList.innerHTML = shareLessonData.map((lesson) => {
+      const hiddenAttr = hideExported && lesson.alreadyExported ? " hidden" : "";
+      return `
+        <article class="inbox-card share-lesson-card"${hiddenAttr} data-share-lesson="${escapeHtml(lesson.lessonId)}">
+          <div class="inbox-card-main">
+            <label class="share-lesson-label">
+              <input class="share-lesson-checkbox" type="checkbox"
+                data-lesson-id="${escapeHtml(lesson.lessonId)}"
+                ${shareSelectedIds.has(lesson.lessonId) ? "checked" : ""}
+              />
+              <div>
+                <div class="inbox-meta">
+                  <span class="source-label">${escapeHtml(lesson.title)}</span>
+                  <span class="status-badge">${escapeHtml(durationLabel(lesson.durationMs))}</span>
+                </div>
+                <p class="source-note">${escapeHtml(lesson.sourceUrl || "No URL")}</p>
+                ${lesson.alreadyExported
+                  ? `<p class="muted-copy">Exported ${escapeHtml(new Date(lesson.lastExportedAt).toLocaleString())}</p>`
+                  : ""}
+              </div>
+            </label>
+          </div>
+        </article>
+      `;
+    }).join("");
+
+    for (const checkbox of shareLessonList.querySelectorAll(".share-lesson-checkbox")) {
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) {
+          shareSelectedIds.add(checkbox.dataset.lessonId);
+        } else {
+          shareSelectedIds.delete(checkbox.dataset.lessonId);
+        }
+        updateExportButton();
+      });
+    }
+
+    updateExportButton();
+  } catch (error) {
+    shareLessonList.innerHTML = `
+      <div class="empty-card">
+        <h3>Lessons could not be loaded</h3>
+        <p>${escapeHtml(error.message)}</p>
+      </div>
+    `;
+  }
+}
+
+function updateExportButton() {
+  if (!shareExportSelected) return;
+  const count = shareSelectedIds.size;
+  shareExportSelected.textContent = count ? `Export selected (${count})` : "Export selected (0)";
+  shareExportSelected.disabled = count === 0;
+}
+
+shareHideExported?.addEventListener("change", () => {
+  void refreshShareLessonList();
+});
+
+shareSelectAll?.addEventListener("click", () => {
+  const hideExported = shareHideExported?.checked ?? true;
+  for (const lesson of shareLessonData) {
+    if (hideExported && lesson.alreadyExported) continue;
+    shareSelectedIds.add(lesson.lessonId);
+  }
+  void refreshShareLessonList();
+});
+
+shareDeselectAll?.addEventListener("click", () => {
+  shareSelectedIds.clear();
+  void refreshShareLessonList();
+});
+
+shareExportSelected?.addEventListener("click", async () => {
+  if (!shareSelectedIds.size) return;
+  const ids = [...shareSelectedIds];
+  shareExportSelected.disabled = true;
+  shareExportSelected.textContent = "Exporting…";
+  shareActionStatus.textContent = `Creating zip with ${ids.length} lesson(s)…`;
+  try {
+    await createShareExport({ lessonIds: ids });
+    shareActionStatus.textContent = "Export complete.";
+    shareSelectedIds.clear();
+    await Promise.all([
+      refreshShareLessonList(),
+      refreshShareExports()
+    ]);
+  } catch (error) {
+    shareActionStatus.textContent = error.message;
+  } finally {
+    shareExportSelected.disabled = false;
+    updateExportButton();
+    window.setTimeout(() => {
+      shareActionStatus.textContent = "";
+    }, 4000);
+  }
+});
+
+shareImportInput?.addEventListener("change", async () => {
+  const file = shareImportInput.files?.[0];
+  if (!file) return;
+
+  shareImportLabel.textContent = "Importing…";
+  shareImportInput.disabled = true;
+  shareActionStatus.textContent = "Processing zip…";
+  try {
+    const result = await importShareZip(file);
+    shareActionStatus.textContent = `Done. Imported: ${result.results.filter((r) => r.status === "imported").length}, Skipped: ${result.results.filter((r) => r.status.startsWith("skipped") || r.status === "would-import").length}`;
+    await Promise.all([
+      refreshShareRegistry(),
+      refreshShareExports(),
+      refreshShareLessonList()
+    ]);
+  } catch (error) {
+    shareActionStatus.textContent = error.message;
+  } finally {
+    shareImportInput.value = "";
+    shareImportInput.disabled = false;
+    shareImportLabel.textContent = "Import zip";
+    window.setTimeout(() => {
+      shareActionStatus.textContent = "";
+    }, 6000);
+  }
+});

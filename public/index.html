@@ -26,6 +26,7 @@
         </button>
         <button class="nav-link" data-page="library">Library</button>
         <button class="nav-link" data-page="journal">Journal</button>
+        <button class="nav-link" data-page="share">Share</button>
       </nav>
     </header>
 
@@ -103,6 +104,75 @@
             from completed lessons.
           </p>
         </div>
+      </section>
+
+      <section id="share-page" class="page" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Share lessons between machines</p>
+            <h1>Share</h1>
+          </div>
+        </div>
+
+        <div class="share-help">
+          <p class="eyebrow">Workflow</p>
+          <ol>
+            <li>Select lessons below and click <strong>Export selected</strong> to create a zip.</li>
+            <li>Upload the zip to Google Drive (or click Import zip on the other machine).</li>
+          </ol>
+          <p class="muted-copy">
+            Already-exported lessons are hidden by default. Toggle "Show all" to re-export them.
+          </p>
+        </div>
+
+        <div class="section-heading share-sub-heading">
+          <div>
+            <p class="eyebrow">Select lessons to package</p>
+            <h2>Lessons</h2>
+          </div>
+          <div class="share-toolbar">
+            <label class="share-toggle-label">
+              <input type="checkbox" id="share-hide-exported" checked />
+              Hide already exported
+            </label>
+            <button class="secondary-action" type="button" id="share-select-all">Select all</button>
+            <button class="secondary-action" type="button" id="share-deselect-all">Deselect all</button>
+            <button class="primary-action" type="button" id="share-export-selected">Export selected (0)</button>
+          </div>
+        </div>
+        <div id="share-lesson-list" class="inbox-list" aria-live="polite"></div>
+
+        <div class="share-actions-row">
+          <label class="upload-action" id="share-import-area">
+            <span id="share-import-label">Import zip</span>
+            <input id="share-import-input" type="file" accept=".zip" hidden />
+          </label>
+          <span id="share-action-status" class="muted-copy"></span>
+        </div>
+
+        <div class="section-heading share-sub-heading">
+          <div>
+            <p class="eyebrow">Export history</p>
+            <h2>Exports</h2>
+          </div>
+          <button class="primary-action" type="button" id="share-refresh-exports">
+            Refresh
+          </button>
+        </div>
+        <div id="share-exports-list" class="inbox-list" aria-live="polite"></div>
+
+        <div class="section-heading share-sub-heading">
+          <div>
+            <p class="eyebrow">Known lessons across machines</p>
+            <h2>Registry</h2>
+          </div>
+          <div class="filter-row share-filter-row">
+            <button class="filter-chip is-active" data-share-status="">All</button>
+            <button class="filter-chip" data-share-status="available">Available</button>
+            <button class="filter-chip" data-share-status="deleted">Deleted</button>
+          </div>
+        </div>
+        <div id="share-registry-list" class="inbox-list" aria-live="polite"></div>
       </section>
     </main>
 
