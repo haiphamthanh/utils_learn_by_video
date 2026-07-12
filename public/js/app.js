@@ -413,7 +413,6 @@ async function openLessonInfo(lessonId) {
   if (!lessonInfoDialog.open) lessonInfoDialog.showModal();
 
   lessonInfoRoot.querySelector("[data-info-preview]")?.addEventListener("click", () => {
-    lessonInfoDialog.close();
     void openLesson(lessonId, "library");
   });
 
