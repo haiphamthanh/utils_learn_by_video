@@ -2884,6 +2884,19 @@ button {
   gap: var(--space-sm);
 }
 
+.journal-stats-action {
+  flex: 0 0 38px;
+  color: var(--accent-strong);
+}
+
+.journal-stats-action svg rect {
+  fill: color-mix(in srgb, currentColor, transparent 82%);
+}
+
+.journal-stats-action:hover svg rect {
+  fill: color-mix(in srgb, currentColor, transparent 72%);
+}
+
 #journal-page.page {
   padding-top: 8px;
 }
@@ -3117,6 +3130,10 @@ button {
 
   .journal-heading-actions > button {
     flex: 1;
+  }
+
+  .journal-heading-actions > .journal-stats-action {
+    flex: 0 0 38px;
   }
 
   .lesson-note-count {
