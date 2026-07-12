@@ -53,6 +53,8 @@ if (statsDialog) {
 }
 const lessonPlayerRoot = document.querySelector("#lesson-player-root");
 const lessonDialog = document.querySelector("#lesson-dialog");
+const lessonInfoDialog = document.querySelector("#lesson-info-dialog");
+const lessonInfoRoot = document.querySelector("#lesson-info-root");
 const shareExportsList = document.querySelector("#share-exports-list");
 const shareRegistryList = document.querySelector("#share-registry-list");
 const shareRefreshExports = document.querySelector("#share-refresh-exports");
@@ -76,6 +78,7 @@ let currentLibraryStatus = "";
 let currentLibraryFavorite = false;
 let journalOverviewCache = null;
 let librarySearchTimer = null;
+let libraryLessonMap = new Map();
 let metadataEditingLesson = null;
 
 const lessonPlayer = createLessonPlayer({
@@ -98,8 +101,23 @@ if (lessonDialog) {
   document.querySelector("[data-close-lesson]")?.addEventListener("click", closeLessonDialog);
 }
 
+function closeLessonInfoDialog() {
+  lessonInfoDialog?.close();
+}
+
+if (lessonInfoDialog) {
+  lessonInfoDialog.addEventListener("click", (event) => {
+    if (event.target === lessonInfoDialog) closeLessonInfoDialog();
+  });
+  lessonInfoDialog.addEventListener("close", () => {
+    if (lessonInfoRoot) lessonInfoRoot.innerHTML = "";
+  });
+  document.querySelector("[data-close-lesson-info]")?.addEventListener("click", closeLessonInfoDialog);
+}
+
 function showPage(pageName, { updateUrl = true } = {}) {
   if (lessonDialog?.open) lessonDialog.close();
+  if (lessonInfoDialog?.open) lessonInfoDialog.close();
   lessonPlayer.reset();
 
   pages.forEach((page) => {
@@ -202,7 +220,8 @@ function readingStatusBadgeMarkup(status) {
 
 function libraryIconSvg(name) {
   const icons = {
-    heart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.4 5.4 0 0 0-7.7 0L12 5.7l-1.1-1.1a5.4 5.4 0 0 0-7.7 7.7L12 21l8.8-8.7a5.4 5.4 0 0 0 0-7.7Z"></path></svg>'
+    heart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.4 5.4 0 0 0-7.7 0L12 5.7l-1.1-1.1a5.4 5.4 0 0 0-7.7 7.7L12 21l8.8-8.7a5.4 5.4 0 0 0 0-7.7Z"></path></svg>',
+    preview: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>'
   };
   return icons[name] || "";
 }
@@ -237,6 +256,13 @@ function lessonCardMarkup(item) {
     <article class="lesson-card" data-lesson-id="${escapeHtml(item.id)}" data-inbox-id="${escapeHtml(item.inboxItemId || "")}">
       <button class="lesson-card-delete" type="button" title="Delete lesson" data-lesson-delete>×</button>
       <button
+        class="lesson-card-preview"
+        type="button"
+        title="Preview lesson"
+        aria-label="Preview lesson"
+        data-lesson-preview
+      >${libraryIconSvg("preview")}</button>
+      <button
         class="lesson-card-favorite${item.isFavorite ? " is-active" : ""}"
         type="button"
         title="${item.isFavorite ? "Remove favorite" : "Add favorite"}"
@@ -269,74 +295,127 @@ function lessonCardMarkup(item) {
         <button class="secondary-action regenerate-action" type="button" data-lesson-regenerate>Regenerate lesson</button>
         ${lessonNotesBadgeMarkup(item.noteCount)}
       </div>
-      <details class="lesson-transcript-preview">
-        <summary>Review transcript</summary>
-        <div class="lesson-transcript-content"></div>
-      </details>
     </article>
   `;
 }
 
-async function loadTranscriptForCard(card) {
-  const lessonId = card.dataset.lessonId;
-  const inboxId = card.dataset.inboxId;
-  const details = card.querySelector(".lesson-transcript-preview");
-  const content = card.querySelector(".lesson-transcript-content");
-  if (!inboxId || !details || !content) return;
-
-  details.addEventListener("toggle", async () => {
-    if (!details.open || content.dataset.loaded === "true") return;
-    content.innerHTML = "<p class=\"muted-copy\">Loading transcript…</p>";
-    try {
-      const transcript = await getTranscript(inboxId);
-      content.dataset.loaded = "true";
-      content.innerHTML = transcript.segments.map((segment) => {
-        const effective = segment.reviewedText || segment.cleanedText || segment.rawText;
-        return `
-          <div class="transcript-segment" data-segment-id="${segment.id}">
-            <span class="segment-time">${formatTime(segment.startMs)}</span>
-            <div class="segment-editor">
-              <textarea rows="2">${escapeHtml(effective)}</textarea>
-              <div class="segment-actions">
-                <span class="segment-origin">${segment.reviewStatus === "REVIEWED" ? "Reviewed" : "Cleaned"}</span>
-                <button class="segment-save" type="button">Save correction</button>
-              </div>
+async function renderTranscriptEditor(inboxId, content) {
+  if (!inboxId || !content) return;
+  content.innerHTML = "<p class=\"muted-copy\">Loading transcript…</p>";
+  try {
+    const transcript = await getTranscript(inboxId);
+    content.innerHTML = transcript.segments.map((segment) => {
+      const effective = segment.reviewedText || segment.cleanedText || segment.rawText;
+      return `
+        <div class="transcript-segment" data-segment-id="${segment.id}">
+          <span class="segment-time">${formatTime(segment.startMs)}</span>
+          <div class="segment-editor">
+            <textarea rows="2">${escapeHtml(effective)}</textarea>
+            <div class="segment-actions">
+              <span class="segment-origin">${segment.reviewStatus === "REVIEWED" ? "Reviewed" : "Cleaned"}</span>
+              <button class="segment-save" type="button">Save correction</button>
             </div>
           </div>
-        `;
-      }).join("");
+        </div>
+      `;
+    }).join("");
 
-      for (const row of content.querySelectorAll(".transcript-segment")) {
-        const textarea = row.querySelector("textarea");
-        const saveButton = row.querySelector(".segment-save");
-        const origin = row.querySelector(".segment-origin");
-        saveButton.addEventListener("click", async () => {
-          saveButton.disabled = true;
-          saveButton.textContent = "Saving…";
-          try {
-            await updateTranscriptSegment(inboxId, row.dataset.segmentId, textarea.value);
-            saveButton.textContent = "Saved";
-            origin.textContent = "Reviewed";
-            window.setTimeout(() => {
-              saveButton.textContent = "Save correction";
-              saveButton.disabled = false;
-            }, 900);
-          } catch (error) {
-            window.alert(error.message);
+    for (const row of content.querySelectorAll(".transcript-segment")) {
+      const textarea = row.querySelector("textarea");
+      const saveButton = row.querySelector(".segment-save");
+      const origin = row.querySelector(".segment-origin");
+      saveButton.addEventListener("click", async () => {
+        saveButton.disabled = true;
+        saveButton.textContent = "Saving…";
+        try {
+          await updateTranscriptSegment(inboxId, row.dataset.segmentId, textarea.value);
+          saveButton.textContent = "Saved";
+          origin.textContent = "Reviewed";
+          window.setTimeout(() => {
             saveButton.textContent = "Save correction";
             saveButton.disabled = false;
-          }
-        });
-      }
-    } catch {
-      content.innerHTML = "<p class=\"muted-copy\">Transcript not found. Generate a lesson first.</p>";
+          }, 900);
+        } catch (error) {
+          window.alert(error.message);
+          saveButton.textContent = "Save correction";
+          saveButton.disabled = false;
+        }
+      });
     }
+  } catch {
+    content.innerHTML = "<p class=\"muted-copy\">Transcript not found. Generate a lesson first.</p>";
+  }
+}
+
+function lessonInfoMarkup(item) {
+  const status = readingStatus(item);
+  const poster = item.media?.posterUrl
+    ? `<img src="${escapeHtml(item.media.posterUrl)}" alt="" />`
+    : '<div class="lesson-card-poster-placeholder">EJ</div>';
+
+  return `
+    <section class="lesson-info-view" data-lesson-id="${escapeHtml(item.id)}" data-inbox-id="${escapeHtml(item.inboxItemId || "")}">
+      <div class="lesson-info-hero">
+        <div class="lesson-info-media">${poster}</div>
+        <div class="lesson-info-main">
+          <div class="lesson-info-kicker">
+            ${durationBadgeMarkup(item.durationMs)}
+            ${readingStatusBadgeMarkup(status)}
+          </div>
+          <h2>${escapeHtml(item.title)}</h2>
+          <p>${escapeHtml(item.summaryVi || "A small moment ready for listening practice.")}</p>
+          <div class="lesson-info-stats">
+            <span>${escapeHtml(item.difficulty || "UNRATED")}</span>
+            <span>${item.viewCount || 0} views</span>
+            <span>${Number(item.noteCount || 0)} notes</span>
+          </div>
+          <div class="lesson-info-actions">
+            <button class="primary-action lesson-info-preview" type="button" data-info-preview>
+              ${libraryIconSvg("preview")}
+              Preview
+            </button>
+            ${item.sourceUrl ? `<a class="source-link" href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noreferrer">Open source</a>` : ""}
+            <button class="secondary-action" type="button" data-info-metadata>Update title</button>
+          </div>
+        </div>
+      </div>
+
+      <details class="lesson-transcript-preview lesson-info-transcript" open>
+        <summary>Review transcript</summary>
+        <div class="lesson-transcript-content" data-info-transcript></div>
+      </details>
+    </section>
+  `;
+}
+
+async function openLessonInfo(lessonId) {
+  const item = libraryLessonMap.get(lessonId);
+  if (!item || !lessonInfoDialog || !lessonInfoRoot) return;
+
+  lessonInfoRoot.innerHTML = lessonInfoMarkup(item);
+  if (!lessonInfoDialog.open) lessonInfoDialog.showModal();
+
+  lessonInfoRoot.querySelector("[data-info-preview]")?.addEventListener("click", () => {
+    lessonInfoDialog.close();
+    void openLesson(lessonId, "library");
   });
+
+  lessonInfoRoot.querySelector("[data-info-metadata]")?.addEventListener("click", () => {
+    lessonInfoDialog.close();
+    void openMetadataDialog(lessonId);
+  });
+
+  await renderTranscriptEditor(item.inboxItemId, lessonInfoRoot.querySelector("[data-info-transcript]"));
 }
 
 function bindLibraryCards(container) {
   for (const card of container.querySelectorAll("[data-lesson-id]")) {
     card.querySelector(".lesson-card-open")?.addEventListener("click", () => {
+      void openLessonInfo(card.dataset.lessonId);
+    });
+
+    card.querySelector("[data-lesson-preview]")?.addEventListener("click", (event) => {
+      event.stopPropagation();
       void openLesson(card.dataset.lessonId, "library");
     });
 
@@ -367,7 +446,8 @@ function bindLibraryCards(container) {
         btn.classList.toggle("is-active", isFavorite);
         btn.setAttribute("aria-pressed", String(isFavorite));
         btn.title = isFavorite ? "Remove favorite" : "Add favorite";
-        btn.textContent = isFavorite ? "Favorited" : "Favorite";
+        btn.setAttribute("aria-label", isFavorite ? "Remove favorite" : "Add favorite");
+        btn.innerHTML = libraryIconSvg("heart");
         if (currentLibraryFavorite && !isFavorite) {
           await refreshLibrary();
         }
@@ -400,8 +480,6 @@ function bindLibraryCards(container) {
       event.stopPropagation();
       void openMetadataDialog(card.dataset.lessonId);
     });
-
-    loadTranscriptForCard(card);
   }
 }
 
@@ -756,6 +834,8 @@ async function refreshLibrary() {
       favorite: currentLibraryFavorite,
       limit: 200
     });
+
+    libraryLessonMap = new Map(lessons.map((lesson) => [lesson.id, lesson]));
 
     if (!lessons.length) {
       libraryLessons.innerHTML = `
