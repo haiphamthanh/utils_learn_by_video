@@ -24,6 +24,12 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function dateTitle(value = nowIso()) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return nowIso().slice(0, 10);
+  return date.toISOString().slice(0, 10);
+}
+
 function learningError(code, message, status = 400) {
   const error = new Error(message);
   error.code = code;
@@ -110,6 +116,40 @@ function readJournal(lessonId, artifactJournal = {}) {
   return values;
 }
 
+function normalizeNoteRow(row) {
+  const createdAt = row.createdAt;
+  return {
+    id: row.id,
+    lessonId: row.lessonId,
+    title: row.title || dateTitle(createdAt),
+    content: row.content,
+    isHidden: Boolean(row.isHidden),
+    createdAt,
+    updatedAt: row.updatedAt
+  };
+}
+
+export function listLessonNotes(lessonId, { includeHidden = true } = {}) {
+  getLessonRecord(lessonId);
+  const db = getDatabase();
+  const rows = db.prepare(`
+    SELECT
+      id,
+      lesson_id AS lessonId,
+      title,
+      content,
+      is_hidden AS isHidden,
+      created_at AS createdAt,
+      updated_at AS updatedAt
+    FROM lesson_notes
+    WHERE lesson_id = ?
+      AND (? = 1 OR is_hidden = 0)
+    ORDER BY created_at DESC
+  `).all(lessonId, includeHidden ? 1 : 0);
+
+  return rows.map(normalizeNoteRow);
+}
+
 function readProgress(lessonId, artifactProgress = {}) {
   const db = getDatabase();
   const row = db.prepare(`
@@ -194,7 +234,13 @@ export function listLessons({ q = "", status = "", favorite = false, limit = 100
       COALESCE(lp.view_count, 0) AS viewCount,
       COALESCE(lp.listen_count, 0) AS listenCount,
       COALESCE(lp.shadow_count, 0) AS shadowCount,
-      lp.last_opened_at AS lastOpenedAt
+      lp.last_opened_at AS lastOpenedAt,
+      (
+        SELECT COUNT(*)
+        FROM lesson_notes ln
+        WHERE ln.lesson_id = l.id
+          AND ln.is_hidden = 0
+      ) AS noteCount
     FROM lessons l
     JOIN inbox_items i ON i.id = l.inbox_item_id
     LEFT JOIN sources s ON s.id = i.source_id
@@ -252,6 +298,12 @@ export function listLessons({ q = "", status = "", favorite = false, limit = 100
         WHERE lesson_id = ?
       `).get(row.id)?.value || "";
 
+      const noteText = db.prepare(`
+        SELECT GROUP_CONCAT(title || ' ' || content, ' ') AS value
+        FROM lesson_notes
+        WHERE lesson_id = ?
+      `).get(row.id)?.value || "";
+
       let generatedText = "";
       try {
         const artifact = JSON.parse(fs.readFileSync(row.lessonJsonPath, "utf-8"));
@@ -278,6 +330,7 @@ export function listLessons({ q = "", status = "", favorite = false, limit = 100
         row.topic,
         transcriptText,
         journalText,
+        noteText,
         generatedText
       ].filter(Boolean).join(" ").toLocaleLowerCase().includes(needle);
     }).slice(0, safeLimit);
@@ -286,6 +339,7 @@ export function listLessons({ q = "", status = "", favorite = false, limit = 100
   return rows.map((row) => ({
     ...row,
     isFavorite: Boolean(row.isFavorite),
+    noteCount: Number(row.noteCount || 0),
     lessonJsonPath: undefined,
     transcriptId: undefined,
     media: {
@@ -301,6 +355,7 @@ export function getLessonDetail(lessonId) {
   const artifact = readArtifact(record);
   const journal = readJournal(lessonId, artifact.journal || {});
   const progress = readProgress(lessonId, artifact.progress || {});
+  const notes = listLessonNotes(lessonId);
 
   return {
     ...artifact,
@@ -308,6 +363,7 @@ export function getLessonDetail(lessonId) {
       durationMs: record.durationMs
     },
     journal,
+    notes,
     progress,
     mediaUrls: {
       video: record.videoPath ? `/api/lessons/${lessonId}/media/video` : null,
@@ -315,6 +371,117 @@ export function getLessonDetail(lessonId) {
       poster: record.posterPath ? `/api/lessons/${lessonId}/media/poster` : null
     }
   };
+}
+
+export function createLessonNote(lessonId, payload = {}) {
+  getLessonRecord(lessonId);
+  const content = String(payload.content ?? "").trim();
+
+  if (!content) {
+    throw learningError("NOTE_EMPTY", "Note content is required.");
+  }
+
+  const db = getDatabase();
+  const timestamp = nowIso();
+  const id = `note_${crypto.randomUUID()}`;
+  const title = String(payload.title ?? dateTitle(timestamp)).trim() || dateTitle(timestamp);
+
+  db.prepare(`
+    INSERT INTO lesson_notes (
+      id, lesson_id, title, content, is_hidden, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, 0, ?, ?)
+  `).run(id, lessonId, title, content, timestamp, timestamp);
+
+  return normalizeNoteRow(db.prepare(`
+    SELECT
+      id,
+      lesson_id AS lessonId,
+      title,
+      content,
+      is_hidden AS isHidden,
+      created_at AS createdAt,
+      updated_at AS updatedAt
+    FROM lesson_notes
+    WHERE id = ?
+  `).get(id));
+}
+
+export function updateLessonNote(lessonId, noteId, payload = {}) {
+  getLessonRecord(lessonId);
+  const db = getDatabase();
+  const existing = db.prepare(`
+    SELECT id
+    FROM lesson_notes
+    WHERE id = ? AND lesson_id = ?
+  `).get(noteId, lessonId);
+
+  if (!existing) {
+    throw learningError("NOTE_NOT_FOUND", "Note not found.", 404);
+  }
+
+  const hasContent = Object.prototype.hasOwnProperty.call(payload, "content");
+  const hasTitle = Object.prototype.hasOwnProperty.call(payload, "title");
+  const hasHidden = Object.prototype.hasOwnProperty.call(payload, "isHidden");
+  const content = hasContent ? String(payload.content ?? "").trim() : null;
+  const title = hasTitle ? String(payload.title ?? "").trim() : null;
+
+  if (hasContent && !content) {
+    throw learningError("NOTE_EMPTY", "Note content is required.");
+  }
+  if (hasTitle && !title) {
+    throw learningError("NOTE_TITLE_EMPTY", "Note title is required.");
+  }
+  if (!hasContent && !hasTitle && !hasHidden) {
+    throw learningError("NOTE_EMPTY", "No note fields were provided.");
+  }
+
+  db.prepare(`
+    UPDATE lesson_notes
+    SET
+      title = CASE WHEN ? = 1 THEN ? ELSE title END,
+      content = CASE WHEN ? = 1 THEN ? ELSE content END,
+      is_hidden = CASE WHEN ? = 1 THEN ? ELSE is_hidden END,
+      updated_at = ?
+    WHERE id = ? AND lesson_id = ?
+  `).run(
+    hasTitle ? 1 : 0,
+    title,
+    hasContent ? 1 : 0,
+    content,
+    hasHidden ? 1 : 0,
+    payload.isHidden ? 1 : 0,
+    nowIso(),
+    noteId,
+    lessonId
+  );
+
+  return normalizeNoteRow(db.prepare(`
+    SELECT
+      id,
+      lesson_id AS lessonId,
+      title,
+      content,
+      is_hidden AS isHidden,
+      created_at AS createdAt,
+      updated_at AS updatedAt
+    FROM lesson_notes
+    WHERE id = ? AND lesson_id = ?
+  `).get(noteId, lessonId));
+}
+
+export function deleteLessonNote(lessonId, noteId) {
+  getLessonRecord(lessonId);
+  const db = getDatabase();
+  const result = db.prepare(`
+    DELETE FROM lesson_notes
+    WHERE id = ? AND lesson_id = ?
+  `).run(noteId, lessonId);
+
+  if (result.changes === 0) {
+    throw learningError("NOTE_NOT_FOUND", "Note not found.", 404);
+  }
+
+  return { id: noteId, deleted: true };
 }
 
 export function updateLessonMetadata(lessonId, payload = {}) {

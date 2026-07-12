@@ -235,6 +235,7 @@ export function attachMedia(inboxItemId, uploadedFile) {
 
     for (const lessonId of lessonIds) {
       db.prepare("DELETE FROM journal_entries WHERE lesson_id = ?").run(lessonId);
+      db.prepare("DELETE FROM lesson_notes WHERE lesson_id = ?").run(lessonId);
       db.prepare("DELETE FROM learning_progress WHERE lesson_id = ?").run(lessonId);
     }
 
@@ -360,6 +361,7 @@ export function deleteInboxItem(inboxItemId) {
 
     for (const lessonId of lessonIds) {
       db.prepare("DELETE FROM journal_entries WHERE lesson_id = ?").run(lessonId);
+      db.prepare("DELETE FROM lesson_notes WHERE lesson_id = ?").run(lessonId);
       db.prepare("DELETE FROM learning_progress WHERE lesson_id = ?").run(lessonId);
     }
 

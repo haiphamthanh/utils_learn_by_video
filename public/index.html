@@ -73,25 +73,23 @@
 
       <section id="library-page" class="page" hidden>
         <div class="section-heading library-heading">
-          <div>
-            <h1>Library</h1>
-          </div>
-          <div class="library-heading-actions">
-            <button class="primary-action" data-open-capture>
-              Add source
-            </button>
+          <h1>Library</h1>
+          <div class="library-toolbar">
             <label class="library-search">
               <span class="sr-only">Search lessons</span>
               <input id="library-search" type="search" placeholder="Search title, transcript, phrase or journal…" />
             </label>
+            <div class="library-filter-chips">
+              <button class="filter-chip is-active" data-library-status="">All</button>
+              <button class="filter-chip" data-library-status="NEW">New</button>
+              <button class="filter-chip" data-library-status="LEARNING">Reading</button>
+              <button class="filter-chip" data-library-status="MASTERED">Read</button>
+              <button class="filter-chip favorite-filter-chip" data-library-favorite="true" aria-label="Favorite lessons">♡</button>
+            </div>
+            <button class="primary-action library-add-source" data-open-capture aria-label="Add source" title="Add source">
+              +
+            </button>
           </div>
-        </div>
-        <div class="filter-row">
-          <button class="filter-chip is-active" data-library-status="">All</button>
-          <button class="filter-chip" data-library-status="NEW">New</button>
-          <button class="filter-chip" data-library-status="LEARNING">Reading</button>
-          <button class="filter-chip" data-library-status="MASTERED">Read</button>
-          <button class="filter-chip favorite-filter-chip" data-library-favorite="true" aria-label="Favorite lessons">♡</button>
         </div>
         <div id="library-lessons" class="lesson-card-grid" aria-live="polite"></div>
       </section>

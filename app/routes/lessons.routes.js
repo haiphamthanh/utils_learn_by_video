@@ -2,10 +2,14 @@ import fs from "node:fs";
 import { Router } from "express";
 
 import {
+  createLessonNote,
+  deleteLessonNote,
   getLessonDetail,
   getLessonMedia,
   listLessons,
+  listLessonNotes,
   recordLessonProgress,
+  updateLessonNote,
   updateLessonJournal,
   updateLessonMetadata
 } from "../services/learning.service.js";
@@ -82,6 +86,52 @@ export function createLessonsRouter() {
     try {
       res.json({
         data: updateLessonJournal(req.params.id, req.body),
+        error: null
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/:id/notes", (req, res, next) => {
+    try {
+      res.json({
+        data: listLessonNotes(req.params.id, {
+          includeHidden: req.query.includeHidden === "1" || req.query.includeHidden === "true"
+        }),
+        error: null
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/:id/notes", (req, res, next) => {
+    try {
+      res.status(201).json({
+        data: createLessonNote(req.params.id, req.body),
+        error: null
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.patch("/:id/notes/:noteId", (req, res, next) => {
+    try {
+      res.json({
+        data: updateLessonNote(req.params.id, req.params.noteId, req.body),
+        error: null
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.delete("/:id/notes/:noteId", (req, res, next) => {
+    try {
+      res.json({
+        data: deleteLessonNote(req.params.id, req.params.noteId),
         error: null
       });
     } catch (error) {

@@ -87,6 +87,33 @@ export function updateLessonJournal(lessonId, payload) {
   });
 }
 
+export function listLessonNotes(lessonId, { includeHidden = false } = {}) {
+  const query = includeHidden ? "?includeHidden=1" : "";
+  return request(`/api/lessons/${lessonId}/notes${query}`);
+}
+
+export function createLessonNote(lessonId, payload) {
+  return request(`/api/lessons/${lessonId}/notes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateLessonNote(lessonId, noteId, payload) {
+  return request(`/api/lessons/${lessonId}/notes/${encodeURIComponent(noteId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteLessonNote(lessonId, noteId) {
+  return request(`/api/lessons/${lessonId}/notes/${encodeURIComponent(noteId)}`, {
+    method: "DELETE"
+  });
+}
+
 export function updateLessonMetadata(lessonId, payload) {
   return request(`/api/lessons/${lessonId}/metadata`, {
     method: "PATCH",

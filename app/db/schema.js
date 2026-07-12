@@ -162,6 +162,17 @@ CREATE TABLE IF NOT EXISTS journal_entries (
   FOREIGN KEY(lesson_id) REFERENCES lessons(id)
 );
 
+CREATE TABLE IF NOT EXISTS lesson_notes (
+  id TEXT PRIMARY KEY,
+  lesson_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  is_hidden INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(lesson_id) REFERENCES lessons(id)
+);
+
 CREATE TABLE IF NOT EXISTS learning_progress (
   lesson_id TEXT PRIMARY KEY,
   learning_status TEXT NOT NULL DEFAULT 'NEW',
@@ -230,6 +241,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_journal_lesson_type
 
 CREATE INDEX IF NOT EXISTS idx_journal_content
   ON journal_entries(content);
+
+CREATE INDEX IF NOT EXISTS idx_lesson_notes_lesson
+  ON lesson_notes(lesson_id, is_hidden, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_lesson_notes_content
+  ON lesson_notes(content);
 
 CREATE INDEX IF NOT EXISTS idx_learning_progress_status
   ON learning_progress(learning_status, last_opened_at);

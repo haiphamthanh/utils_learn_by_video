@@ -48,6 +48,14 @@ function initializeDatabaseConnection(databasePath) {
     // column already exists — safe to ignore
   }
 
+  try {
+    connection.exec(
+      "ALTER TABLE lesson_notes ADD COLUMN title TEXT NOT NULL DEFAULT ''",
+    );
+  } catch {
+    // column already exists — safe to ignore
+  }
+
   return connection;
 }
 

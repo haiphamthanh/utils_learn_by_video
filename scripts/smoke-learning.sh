@@ -31,6 +31,7 @@ tables = {
 for required in {
     "lessons",
     "journal_entries",
+    "lesson_notes",
     "learning_progress",
     "transcript_segments",
 }:
@@ -61,6 +62,10 @@ connection.execute(
     ("journal_1", "lesson_1", "MY_THOUGHT", "A useful idea", "2026-07-05", "2026-07-05"),
 )
 connection.execute(
+    "INSERT INTO lesson_notes (id, lesson_id, title, content, is_hidden, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    ("note_1", "lesson_1", "2026-07-05", "A quick listening note", 0, "2026-07-05", "2026-07-05"),
+)
+connection.execute(
     "INSERT INTO learning_progress (lesson_id, learning_status, listen_count, shadow_count) VALUES (?, ?, ?, ?)",
     ("lesson_1", "LEARNING", 2, 1),
 )
@@ -69,10 +74,14 @@ connection.commit()
 journal = connection.execute(
     "SELECT content FROM journal_entries WHERE lesson_id='lesson_1'"
 ).fetchone()[0]
+note = connection.execute(
+    "SELECT title, content, is_hidden FROM lesson_notes WHERE lesson_id='lesson_1'"
+).fetchone()
 progress = connection.execute(
     "SELECT learning_status, listen_count, shadow_count FROM learning_progress WHERE lesson_id='lesson_1'"
 ).fetchone()
 assert journal == "A useful idea"
+assert note == ("2026-07-05", "A quick listening note", 0)
 assert progress == ("LEARNING", 2, 1)
 
 player_source = Path("public/js/lesson-player.js").read_text(encoding="utf-8")
@@ -81,9 +90,19 @@ for required in [
     "data-speed=\"0.75\"",
     "data-lesson-tab=\"meaning\"",
     "data-journal-form",
+    "data-show-hidden-notes",
+    "data-note-visibility",
+    "data-note-delete",
+    "data-note-edit",
     "SHADOW_COMPLETED",
 ]:
     assert required in player_source, f"Missing learning player behavior: {required}"
+
+app_source = Path("public/js/app.js").read_text(encoding="utf-8")
+assert "lesson-note-count" in app_source, "Missing library note count badge"
+
+service_source = Path("app/services/learning.service.js").read_text(encoding="utf-8")
+assert "AS noteCount" in service_source, "Missing library note count query"
 
 route_source = Path("app/routes/lessons.routes.js").read_text(encoding="utf-8")
 assert "Content-Range" in route_source
@@ -120,7 +139,7 @@ legacy_tables = {
     row[0]
     for row in legacy.execute("SELECT name FROM sqlite_master WHERE type='table'")
 }
-assert {"journal_entries", "learning_progress"} <= legacy_tables
+assert {"journal_entries", "lesson_notes", "learning_progress"} <= legacy_tables
 
 print("Learning player and v0.4.0 migration smoke test passed.")
 PY

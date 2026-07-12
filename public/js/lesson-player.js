@@ -1,6 +1,9 @@
 import {
+  createLessonNote,
+  deleteLessonNote,
   getLessonDetail,
   updateLessonJournal,
+  updateLessonNote,
   updateLessonProgress
 } from "./api.js";
 
@@ -21,10 +24,23 @@ function effectiveText(segment) {
   return segment.reviewedText || segment.cleanedText || segment.rawText || "";
 }
 
+function noteDateLabel(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function todayDateTitle() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function iconSvg(name) {
   const icons = {
     heart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.4 5.4 0 0 0-7.7 0L12 5.7l-1.1-1.1a5.4 5.4 0 0 0-7.7 7.7L12 21l8.8-8.7a5.4 5.4 0 0 0 0-7.7Z"/></svg>',
-    check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>'
+    check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>',
+    trash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/></svg>',
+    restore: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-1"/></svg>'
   };
   return icons[name] || "";
 }
@@ -38,6 +54,8 @@ export function createLessonPlayer({ root, onClose }) {
   let loopCount = 0;
   let loopGuard = false;
   let loopTimer = null;
+  let showHiddenNotes = false;
+  let editingNoteId = null;
 
   function clearLoopTimer() {
     if (loopTimer) {
@@ -56,6 +74,8 @@ export function createLessonPlayer({ root, onClose }) {
     loopEnabled = false;
     loopCount = 0;
     loopGuard = false;
+    showHiddenNotes = false;
+    editingNoteId = null;
   }
 
   function segments() {
@@ -335,15 +355,192 @@ export function createLessonPlayer({ root, onClose }) {
   }
 
   function renderListeningNotes() {
-    return `
-      <form class="listening-notes" data-listening-notes-form>
-        <textarea name="myThought" rows="4" placeholder="Notes while listening...">${escapeHtml(lesson.journal?.myThought || "")}</textarea>
-        <div class="listening-notes-actions">
-          <span data-listening-notes-status></span>
-          <button class="secondary-action" type="submit">Save notes</button>
-        </div>
-      </form>
+    const allNotes = lesson.notes || [];
+    const hiddenCount = allNotes.filter((note) => note.isHidden).length;
+    const visibleNotes = allNotes.filter((note) => showHiddenNotes || !note.isHidden);
+    const editingNote = allNotes.find((note) => note.id === editingNoteId) || null;
+    const quickTitle = editingNote ? editingNote.title : todayDateTitle();
+    const quickContent = editingNote ? editingNote.content : "";
+    const submitLabel = editingNote ? "Save note" : "Add note";
+    const noteCards = visibleNotes.length ? visibleNotes.map((note) => `
+      <details class="lesson-note-card${note.isHidden ? " is-hidden" : ""}" data-note-id="${escapeHtml(note.id)}" open>
+        <summary>
+          <span class="lesson-note-title" data-note-edit title="Double click to edit">${escapeHtml(note.title || noteDateLabel(note.createdAt))}</span>
+          <span class="lesson-note-summary-actions">
+            <button class="lesson-note-icon-action" type="button" title="Delete note" aria-label="Delete note" data-note-delete>
+              ${iconSvg("trash")}
+            </button>
+            <button
+              class="lesson-note-icon-action"
+              type="button"
+              title="${note.isHidden ? "Restore note" : "Mark done and hide note"}"
+              aria-label="${note.isHidden ? "Restore note" : "Mark done and hide note"}"
+              data-note-visibility="${note.isHidden ? "show" : "hide"}"
+            >
+              ${iconSvg(note.isHidden ? "restore" : "check")}
+            </button>
+          </span>
+        </summary>
+        <p>${escapeHtml(note.content)}</p>
+      </details>
+    `).join("") : `
+      <div class="lesson-note-empty">
+        <strong>${showHiddenNotes ? "No notes yet" : "No visible notes"}</strong>
+        <span>${hiddenCount && !showHiddenNotes ? "Turn on hidden notes to review archived notes." : "Add a note while listening and it will appear here."}</span>
+      </div>
     `;
+
+    return `
+      <section class="listening-notes-panel" data-notes-view>
+        <form class="listening-notes" data-listening-notes-form>
+          <div>
+            <p class="eyebrow">${editingNote ? "Edit note" : "Quick notes"}</p>
+            <input name="title" type="text" value="${escapeHtml(quickTitle)}" placeholder="yyyy-mm-dd" />
+            <textarea name="content" rows="4" placeholder="Add a note while listening...">${escapeHtml(quickContent)}</textarea>
+          </div>
+          <div class="listening-notes-actions">
+            <span data-listening-notes-status></span>
+            <div class="listening-notes-buttons">
+              ${editingNote ? '<button class="secondary-action" type="button" data-note-edit-cancel>Cancel</button>' : ""}
+              <button class="secondary-action" type="submit">${submitLabel}</button>
+            </div>
+          </div>
+        </form>
+
+        <aside class="lesson-notes-list">
+          <div class="lesson-notes-header">
+            <div>
+              <p class="eyebrow">Notes</p>
+              <strong>${visibleNotes.length} shown</strong>
+            </div>
+            <label class="note-hidden-switch">
+              <input type="checkbox" data-show-hidden-notes ${showHiddenNotes ? "checked" : ""} />
+              <span>Show hidden${hiddenCount ? ` (${hiddenCount})` : ""}</span>
+            </label>
+          </div>
+          <div class="lesson-note-stack">${noteCards}</div>
+        </aside>
+      </section>
+    `;
+  }
+
+  function renderNotesView() {
+    const view = root.querySelector("[data-notes-view]");
+    if (!view) return;
+    view.outerHTML = renderListeningNotes();
+    bindLessonNoteEvents();
+  }
+
+  function startEditingNote(noteId) {
+    editingNoteId = noteId;
+    renderNotesView();
+    root.querySelector("[data-listening-notes-form] textarea[name='content']")?.focus();
+  }
+
+  function bindLessonNoteEvents() {
+    root.querySelector("[data-listening-notes-form]")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const titleInput = form.querySelector("input[name='title']");
+      const textarea = form.querySelector("textarea[name='content']");
+      const status = form.querySelector("[data-listening-notes-status]");
+      const submit = form.querySelector("button[type='submit']");
+      const title = titleInput?.value || "";
+      const content = textarea?.value || "";
+
+      if (!title.trim()) {
+        if (status) status.textContent = "Add a title";
+        titleInput?.focus();
+        return;
+      }
+
+      if (!content.trim()) {
+        if (status) status.textContent = "Write a note first";
+        textarea?.focus();
+        return;
+      }
+
+      if (submit) submit.disabled = true;
+      if (status) status.textContent = editingNoteId ? "Saving..." : "Adding...";
+      try {
+        if (editingNoteId) {
+          const updated = await updateLessonNote(lesson.lesson.id, editingNoteId, { title, content });
+          lesson.notes = (lesson.notes || []).map((note) => note.id === editingNoteId ? updated : note);
+          editingNoteId = null;
+        } else {
+          const note = await createLessonNote(lesson.lesson.id, { title, content });
+          lesson.notes = [note, ...(lesson.notes || [])];
+        }
+        renderNotesView();
+      } catch (error) {
+        if (status) status.textContent = error.message;
+        else window.alert(error.message);
+      } finally {
+        if (submit) submit.disabled = false;
+      }
+    });
+
+    root.querySelector("[data-note-edit-cancel]")?.addEventListener("click", () => {
+      editingNoteId = null;
+      renderNotesView();
+    });
+
+    root.querySelector("[data-show-hidden-notes]")?.addEventListener("change", (event) => {
+      showHiddenNotes = event.currentTarget.checked;
+      renderNotesView();
+    });
+
+    for (const editTarget of root.querySelectorAll("[data-note-edit]")) {
+      editTarget.addEventListener("dblclick", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const noteId = event.currentTarget.closest("[data-note-id]")?.dataset.noteId;
+        if (noteId) startEditingNote(noteId);
+      });
+    }
+
+    for (const button of root.querySelectorAll("[data-note-delete]")) {
+      button.addEventListener("click", async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const noteId = event.currentTarget.closest("[data-note-id]")?.dataset.noteId;
+        if (!noteId) return;
+        if (!window.confirm("Delete this note?")) return;
+        event.currentTarget.disabled = true;
+
+        try {
+          await deleteLessonNote(lesson.lesson.id, noteId);
+          lesson.notes = (lesson.notes || []).filter((note) => note.id !== noteId);
+          if (editingNoteId === noteId) editingNoteId = null;
+          renderNotesView();
+        } catch (error) {
+          window.alert(error.message);
+          event.currentTarget.disabled = false;
+        }
+      });
+    }
+
+    for (const button of root.querySelectorAll("[data-note-visibility]")) {
+      button.addEventListener("click", async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const noteCard = event.currentTarget.closest("[data-note-id]");
+        const noteId = noteCard?.dataset.noteId;
+        if (!noteId) return;
+        const isHidden = event.currentTarget.dataset.noteVisibility === "hide";
+        event.currentTarget.disabled = true;
+
+        try {
+          const updated = await updateLessonNote(lesson.lesson.id, noteId, { isHidden });
+          lesson.notes = (lesson.notes || []).map((note) => note.id === noteId ? updated : note);
+          if (isHidden && editingNoteId === noteId) editingNoteId = null;
+          renderNotesView();
+        } catch (error) {
+          window.alert(error.message);
+          event.currentTarget.disabled = false;
+        }
+      });
+    }
   }
 
   function render() {
@@ -486,26 +683,7 @@ export function createLessonPlayer({ root, onClose }) {
       }, { status, submit });
     });
 
-    root.querySelector("[data-listening-notes-form]")?.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const status = form.querySelector("[data-listening-notes-status]");
-      const submit = form.querySelector("button[type='submit']");
-      const data = new FormData(form);
-
-      await saveJournalPatch({
-        myThought: data.get("myThought")
-      }, { status, submit });
-    });
-
-    root.querySelector("[data-listening-notes-form] textarea")?.addEventListener("blur", (event) => {
-      const value = event.currentTarget.value;
-      if (value === (lesson.journal?.myThought || "")) return;
-      const form = root.querySelector("[data-listening-notes-form]");
-      const status = form?.querySelector("[data-listening-notes-status]");
-      const submit = form?.querySelector("button[type='submit']");
-      void saveJournalPatch({ myThought: value }, { status, submit });
-    });
+    bindLessonNoteEvents();
 
     if (media) {
       media.addEventListener("timeupdate", onTimeUpdate);
@@ -536,10 +714,6 @@ export function createLessonPlayer({ root, onClose }) {
         ...payload
       });
 
-      const notes = root.querySelector("[data-listening-notes-form] textarea");
-      if (notes && notes.value !== (lesson.journal.myThought || "")) {
-        notes.value = lesson.journal.myThought || "";
-      }
       const journalThought = root.querySelector("[data-journal-form] textarea[name='myThought']");
       if (journalThought && journalThought.value !== (lesson.journal.myThought || "")) {
         journalThought.value = lesson.journal.myThought || "";

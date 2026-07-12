@@ -145,6 +145,13 @@ function durationLabel(milliseconds) {
   return rest ? `${minutes}m ${rest}s` : `${minutes} min`;
 }
 
+function durationTone(milliseconds) {
+  const seconds = Math.round(Number(milliseconds || 0) / 1000);
+  if (seconds < 60) return "short";
+  if (seconds < 180) return "medium";
+  return "long";
+}
+
 function bytesLabel(value) {
   const units = ["B", "KB", "MB", "GB"];
   let size = Number(value || 0);
@@ -169,12 +176,40 @@ function readingStatus(item = {}) {
   return item.learningStatus || "NEW";
 }
 
-function readingStatusIcon(status) {
-  return {
-    NEW: "○",
-    LEARNING: "◐",
-    MASTERED: "✓"
-  }[status] || "○";
+function readingStatusBadgeMarkup(status) {
+  const normalizedStatus = status || "NEW";
+  return `
+    <span class="reading-status reading-status-${escapeHtml(normalizedStatus.toLowerCase())}">
+      ${escapeHtml(readingStatusLabel(normalizedStatus))}
+    </span>
+  `;
+}
+
+function libraryIconSvg(name) {
+  const icons = {
+    heart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.4 5.4 0 0 0-7.7 0L12 5.7l-1.1-1.1a5.4 5.4 0 0 0-7.7 7.7L12 21l8.8-8.7a5.4 5.4 0 0 0 0-7.7Z"></path></svg>'
+  };
+  return icons[name] || "";
+}
+
+function durationBadgeMarkup(milliseconds) {
+  return `
+    <span class="lesson-duration-badge lesson-duration-${durationTone(milliseconds)}">
+      ${escapeHtml(durationLabel(milliseconds))}
+    </span>
+  `;
+}
+
+function lessonNotesBadgeMarkup(count = 0) {
+  const noteCount = Number(count || 0);
+  return `
+    <span class="lesson-note-count${noteCount ? "" : " is-empty"}" title="${noteCount} note${noteCount === 1 ? "" : "s"}">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M21 12a8 8 0 0 1-8 8H7l-4 3v-5.2A8 8 0 1 1 21 12Z"></path>
+      </svg>
+      <span>${noteCount}</span>
+    </span>
+  `;
 }
 
 function lessonCardMarkup(item) {
@@ -190,20 +225,22 @@ function lessonCardMarkup(item) {
         class="lesson-card-favorite${item.isFavorite ? " is-active" : ""}"
         type="button"
         title="${item.isFavorite ? "Remove favorite" : "Add favorite"}"
+        aria-label="${item.isFavorite ? "Remove favorite" : "Add favorite"}"
         aria-pressed="${item.isFavorite ? "true" : "false"}"
         data-lesson-favorite
-      >${item.isFavorite ? "Favorited" : "Favorite"}</button>
+      >${libraryIconSvg("heart")}</button>
       <button class="lesson-card-open" type="button" aria-label="Open ${escapeHtml(item.title)}">
         <div class="lesson-card-poster">${poster}</div>
         <div class="lesson-card-body">
-          <div class="lesson-card-meta">
-            <span class="reading-status reading-status-${escapeHtml(status.toLowerCase())}">
-              <span class="reading-status-icon">${escapeHtml(readingStatusIcon(status))}</span>
-              ${escapeHtml(readingStatusLabel(status))}
-            </span>
-            <span>${escapeHtml(durationLabel(item.durationMs))}</span>
+          <div class="lesson-card-heading">
+            <div class="lesson-card-meta">
+              ${durationBadgeMarkup(item.durationMs)}
+              ${readingStatusBadgeMarkup(status)}
+            </div>
+            <div class="lesson-card-title-wrap">
+              <h3>${escapeHtml(item.title)}</h3>
+            </div>
           </div>
-          <h3>${escapeHtml(item.title)}</h3>
           <p>${escapeHtml(item.summaryVi || "A small moment ready for listening practice.")}</p>
           <div class="lesson-card-footer">
             <span>${escapeHtml(item.difficulty || "UNRATED")}</span>
@@ -215,6 +252,7 @@ function lessonCardMarkup(item) {
         ${item.sourceUrl ? `<a class="source-link" href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noreferrer">Open source</a>` : ""}
         <button class="secondary-action metadata-action" type="button" data-lesson-metadata>Update title</button>
         <button class="secondary-action regenerate-action" type="button" data-lesson-regenerate>Regenerate lesson</button>
+        ${lessonNotesBadgeMarkup(item.noteCount)}
       </div>
       <details class="lesson-transcript-preview">
         <summary>Review transcript</summary>
@@ -455,7 +493,7 @@ function showLessonPreview(event) {
     <div class="lesson-hover-preview-media">${poster}</div>
     <div class="lesson-hover-preview-body">
       <div class="lesson-card-meta">
-        <span>${escapeHtml(target.dataset.previewStatus || "New")}</span>
+        ${readingStatusBadgeMarkup(target.dataset.previewReadingStatus || "NEW")}
         <span>${escapeHtml(target.dataset.previewViews || "0")} views</span>
       </div>
       <strong>${escapeHtml(target.dataset.previewTitle || "Lesson")}</strong>
@@ -671,6 +709,7 @@ function renderMostViewedLessons(overview) {
         data-preview-summary="${escapeHtml(lesson.summaryVi || "")}"
         data-preview-views="${escapeHtml(String(lesson.viewCount || 0))}"
         data-preview-status="${escapeHtml(readingStatusLabel(readingStatus(lesson)))}"
+        data-preview-reading-status="${escapeHtml(readingStatus(lesson))}"
         data-preview-poster="${escapeHtml(lesson.mediaUrls?.poster || "")}"
       >
         ${escapeHtml(lesson.title)}
