@@ -13,10 +13,26 @@ function ensureDataDirectories() {
     path.join(config.dataDir, "inbox"),
     path.join(config.dataDir, "lessons"),
     path.join(config.dataDir, "temp"),
-    path.join(config.dataDir, "exports")
+    path.join(config.dataDir, "exports"),
   ]) {
     fs.mkdirSync(directory, { recursive: true });
   }
+}
+
+function initializeDatabaseConnection(databasePath) {
+  const connection = new Database(databasePath);
+  connection.pragma("journal_mode = WAL");
+  connection.exec(schemaSql);
+
+  try {
+    connection.exec(
+      "ALTER TABLE share_registry ADD COLUMN last_exported_at TEXT",
+    );
+  } catch {
+    // column already exists — safe to ignore
+  }
+
+  return connection;
 }
 
 export function initializeDatabase() {
@@ -25,17 +41,34 @@ export function initializeDatabase() {
   ensureDataDirectories();
 
   const databasePath = path.join(config.dataDir, "journal.db");
-  db = new Database(databasePath);
-  db.pragma("journal_mode = WAL");
-  db.exec(schemaSql);
 
   try {
-    db.exec("ALTER TABLE share_registry ADD COLUMN last_exported_at TEXT");
-  } catch {
-    // column already exists — safe to ignore
-  }
+    db = initializeDatabaseConnection(databasePath);
+    return db;
+  } catch (error) {
+    const isCorruptDatabase =
+      error?.code === "SQLITE_CORRUPT" || error?.code === "SQLITE_NOTADB";
 
-  return db;
+    if (!isCorruptDatabase || !fs.existsSync(databasePath)) {
+      throw error;
+    }
+
+    const backupPath = `${databasePath}.${Date.now()}.corrupt`;
+    fs.renameSync(databasePath, backupPath);
+
+    try {
+      db = initializeDatabaseConnection(databasePath);
+      console.warn(
+        `[db] Rebuilt corrupt database at ${databasePath} from backup ${backupPath}`,
+      );
+      return db;
+    } catch (retryError) {
+      if (fs.existsSync(backupPath) && !fs.existsSync(databasePath)) {
+        fs.renameSync(backupPath, databasePath);
+      }
+      throw retryError;
+    }
+  }
 }
 
 export function getDatabase() {
