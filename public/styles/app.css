@@ -1898,8 +1898,29 @@ button {
   opacity: 0.5;
 }
 
+#share-page.page {
+  padding-top: 8px;
+}
+
 .share-page-heading {
-  margin-bottom: 18px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 32px;
+  margin-bottom: 16px;
+}
+
+.share-page-heading h1 {
+  font-size: 80px;
+}
+
+.share-heading-copy {
+  max-width: 680px;
+  padding-top: 34px;
+}
+
+.share-heading-copy .eyebrow {
+  margin-bottom: 6px;
 }
 
 .share-help {
@@ -2145,6 +2166,15 @@ button {
   .share-layout,
   .share-help {
     grid-template-columns: 1fr;
+  }
+
+  .share-page-heading {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .share-heading-copy {
+    padding-top: 0;
   }
 }
 
