@@ -355,14 +355,18 @@ function lessonInfoMarkup(item) {
 
   return `
     <section class="lesson-info-view" data-lesson-id="${escapeHtml(item.id)}" data-inbox-id="${escapeHtml(item.inboxItemId || "")}">
-      <div class="lesson-info-hero">
+      <div class="lesson-info-card">
         <div class="lesson-info-media">${poster}</div>
-        <div class="lesson-info-main">
-          <div class="lesson-info-kicker">
-            ${durationBadgeMarkup(item.durationMs)}
-            ${readingStatusBadgeMarkup(status)}
+        <div class="lesson-info-body">
+          <div class="lesson-card-heading lesson-info-heading">
+            <div class="lesson-card-meta">
+              ${durationBadgeMarkup(item.durationMs)}
+              ${readingStatusBadgeMarkup(status)}
+            </div>
+            <div class="lesson-card-title-wrap lesson-info-title-wrap">
+              <h2>${escapeHtml(item.title)}</h2>
+            </div>
           </div>
-          <h2>${escapeHtml(item.title)}</h2>
           <p>${escapeHtml(item.summaryVi || "A small moment ready for listening practice.")}</p>
           <div class="lesson-info-stats">
             <span>${escapeHtml(item.difficulty || "UNRATED")}</span>
