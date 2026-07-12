@@ -545,11 +545,26 @@ button {
 .lesson-info-top-actions .lesson-info-close {
   position: static;
   float: none;
-  width: 36px;
+  display: flex;
+  width: 32px;
   height: 32px;
-  border-radius: 999px;
-  font-size: 22px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.15);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
   box-shadow: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.lesson-info-top-actions .lesson-info-close:hover {
+  background: rgba(185, 28, 28, 0.85);
+  color: #fff;
 }
 
 .lesson-info-heading {
