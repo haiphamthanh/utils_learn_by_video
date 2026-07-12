@@ -32,6 +32,14 @@ function initializeDatabaseConnection(databasePath) {
     // column already exists — safe to ignore
   }
 
+  try {
+    connection.exec(
+      "ALTER TABLE learning_progress ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0",
+    );
+  } catch {
+    // column already exists — safe to ignore
+  }
+
   return connection;
 }
 

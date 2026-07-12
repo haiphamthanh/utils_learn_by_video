@@ -1,23 +1,95 @@
+const GENERIC_FACEBOOK_TITLES = new Set([
+  "facebook",
+  "facebook reel",
+  "reel facebook",
+  "facebook reels",
+  "reels facebook",
+  "watch facebook",
+  "facebook video"
+]);
+
+function hostWithoutWww(url) {
+  return url.hostname.replace(/^www\./, "").toLowerCase();
+}
+
+function isFacebookHost(host) {
+  return host === "facebook.com" || host.endsWith(".facebook.com");
+}
+
+function isYoutubeHost(host) {
+  return host === "youtube.com" || host.endsWith(".youtube.com");
+}
+
+function facebookReelId(url) {
+  return url.pathname.match(/\/reel\/(\d+)/i)?.[1] || "";
+}
+
+function cleanFacebookTitle(value, urlString = "") {
+  const title = cleanTitle(value)
+    .replace(/\s+\|\s+Facebook$/i, "")
+    .replace(/\s+-\s+Facebook$/i, "")
+    .replace(/\s+Facebook$/i, "")
+    .trim();
+
+  const normalized = title.toLocaleLowerCase();
+  if (!title || GENERIC_FACEBOOK_TITLES.has(normalized)) {
+    try {
+      const id = facebookReelId(new URL(urlString));
+      return id ? `Facebook Reel ${id}` : "Facebook Reel";
+    } catch {
+      return "Facebook Reel";
+    }
+  }
+
+  return title;
+}
+
+export const sourceProviders = [
+  {
+    type: "facebook-reel",
+    platform: "facebook",
+    label: "Facebook Reel",
+    matches(url) {
+      return isFacebookHost(hostWithoutWww(url)) && /\/reel\//i.test(url.pathname);
+    },
+    normalize(url) {
+      const id = facebookReelId(url);
+      return id ? `https://www.facebook.com/reel/${id}` : url.toString();
+    },
+    cleanTitle: cleanFacebookTitle
+  },
+  {
+    type: "youtube-short",
+    platform: "youtube",
+    label: "YouTube Short",
+    matches(url) {
+      return isYoutubeHost(hostWithoutWww(url)) && /\/shorts\//i.test(url.pathname);
+    },
+    normalize(url) {
+      const shortId = url.pathname.match(/\/shorts\/([^/?#]+)/i)?.[1] || "";
+      return shortId ? `https://www.youtube.com/shorts/${shortId}` : url.toString();
+    },
+    cleanTitle
+  }
+];
+
+export function providerForUrl(urlString) {
+  const url = new URL(urlString);
+  return sourceProviders.find((provider) => provider.matches(url)) || null;
+}
+
 export function detectSource(urlString) {
   const url = new URL(urlString);
-  const host = url.hostname.replace(/^www\./, "").toLowerCase();
-
-  if ((host === "facebook.com" || host.endsWith(".facebook.com")) && /\/reel\//i.test(url.pathname)) {
+  const provider = sourceProviders.find((item) => item.matches(url));
+  if (provider) {
     return {
-      type: "facebook-reel",
-      platform: "facebook",
-      label: "Facebook Reel"
+      type: provider.type,
+      platform: provider.platform,
+      label: provider.label
     };
   }
 
-  if ((host === "youtube.com" || host.endsWith(".youtube.com")) && /\/shorts\//i.test(url.pathname)) {
-    return {
-      type: "youtube-short",
-      platform: "youtube",
-      label: "YouTube Short"
-    };
-  }
-
+  const host = hostWithoutWww(url);
   return {
     type: "other-url",
     platform: host,
@@ -45,21 +117,8 @@ export function normalizeSourceUrl(input) {
     url.searchParams.delete(key);
   }
 
-  const host = url.hostname.replace(/^www\./, "").toLowerCase();
-
-  if (host === "facebook.com" || host.endsWith(".facebook.com")) {
-    const reelMatch = url.pathname.match(/\/reel\/(\d+)/i);
-    if (reelMatch) {
-      return `https://www.facebook.com/reel/${reelMatch[1]}`;
-    }
-  }
-
-  if (host === "youtube.com" || host.endsWith(".youtube.com")) {
-    const shortMatch = url.pathname.match(/\/shorts\/([^/?#]+)/i);
-    if (shortMatch) {
-      return `https://www.youtube.com/shorts/${shortMatch[1]}`;
-    }
-  }
+  const provider = sourceProviders.find((item) => item.matches(url));
+  if (provider) return provider.normalize(url);
 
   return url.toString();
 }
@@ -83,6 +142,13 @@ export function cleanTitle(value) {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 500);
+}
+
+export function cleanSourceTitle(value, urlString) {
+  const provider = providerForUrl(urlString);
+  return provider?.cleanTitle
+    ? provider.cleanTitle(value, urlString)
+    : cleanTitle(value);
 }
 
 export function isWebUrl(value) {

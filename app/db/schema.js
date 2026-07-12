@@ -165,6 +165,7 @@ CREATE TABLE IF NOT EXISTS journal_entries (
 CREATE TABLE IF NOT EXISTS learning_progress (
   lesson_id TEXT PRIMARY KEY,
   learning_status TEXT NOT NULL DEFAULT 'NEW',
+  is_favorite INTEGER NOT NULL DEFAULT 0,
   listen_count INTEGER NOT NULL DEFAULT 0,
   shadow_count INTEGER NOT NULL DEFAULT 0,
   last_opened_at TEXT,

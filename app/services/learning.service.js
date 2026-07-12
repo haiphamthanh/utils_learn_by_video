@@ -16,7 +16,8 @@ const PROGRESS_ACTIONS = new Set([
   "LISTEN_COMPLETED",
   "SHADOW_COMPLETED",
   "MARK_LEARNING",
-  "MARK_MASTERED"
+  "MARK_MASTERED",
+  "TOGGLE_FAVORITE"
 ]);
 
 function nowIso() {
@@ -112,6 +113,7 @@ function readProgress(lessonId, artifactProgress = {}) {
   const row = db.prepare(`
     SELECT
       learning_status AS status,
+      is_favorite AS isFavorite,
       listen_count AS listenCount,
       shadow_count AS shadowCount,
       last_opened_at AS lastOpenedAt,
@@ -120,8 +122,16 @@ function readProgress(lessonId, artifactProgress = {}) {
     WHERE lesson_id = ?
   `).get(lessonId);
 
-  return row || {
+  if (row) {
+    return {
+      ...row,
+      isFavorite: Boolean(row.isFavorite)
+    };
+  }
+
+  return {
     status: artifactProgress.status || "NEW",
+    isFavorite: Boolean(artifactProgress.isFavorite),
     listenCount: Number(artifactProgress.listenCount || 0),
     shadowCount: Number(artifactProgress.shadowCount || 0),
     lastOpenedAt: null,
@@ -133,6 +143,7 @@ function writeArtifactState(record, artifact, journal, progress) {
   artifact.journal = journal;
   artifact.progress = {
     status: progress.status,
+    isFavorite: Boolean(progress.isFavorite),
     listenCount: progress.listenCount,
     shadowCount: progress.shadowCount,
     lastOpenedAt: progress.lastOpenedAt,
@@ -174,6 +185,7 @@ export function listLessons({ q = "", status = "", limit = 100 } = {}) {
       CASE WHEN m.normalized_audio_path IS NOT NULL THEN 1 ELSE 0 END AS hasAudio,
       CASE WHEN m.poster_path IS NOT NULL THEN 1 ELSE 0 END AS hasPoster,
       COALESCE(lp.learning_status, 'NEW') AS learningStatus,
+      COALESCE(lp.is_favorite, 0) AS isFavorite,
       COALESCE(lp.listen_count, 0) AS listenCount,
       COALESCE(lp.shadow_count, 0) AS shadowCount,
       lp.last_opened_at AS lastOpenedAt
@@ -257,6 +269,7 @@ export function listLessons({ q = "", status = "", limit = 100 } = {}) {
 
   return rows.map((row) => ({
     ...row,
+    isFavorite: Boolean(row.isFavorite),
     lessonJsonPath: undefined,
     transcriptId: undefined,
     media: {
@@ -363,16 +376,19 @@ export function recordLessonProgress(lessonId, action) {
   } else if (action === "MARK_MASTERED") {
     next.status = "MASTERED";
     next.lastCompletedAt = timestamp;
+  } else if (action === "TOGGLE_FAVORITE") {
+    next.isFavorite = !Boolean(current.isFavorite);
   }
 
   db.prepare(`
     INSERT INTO learning_progress (
-      lesson_id, learning_status, listen_count, shadow_count,
+      lesson_id, learning_status, is_favorite, listen_count, shadow_count,
       last_opened_at, last_completed_at
-    ) VALUES (?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(lesson_id)
     DO UPDATE SET
       learning_status = excluded.learning_status,
+      is_favorite = excluded.is_favorite,
       listen_count = excluded.listen_count,
       shadow_count = excluded.shadow_count,
       last_opened_at = excluded.last_opened_at,
@@ -380,6 +396,7 @@ export function recordLessonProgress(lessonId, action) {
   `).run(
     lessonId,
     next.status,
+    Boolean(next.isFavorite) ? 1 : 0,
     next.listenCount,
     next.shadowCount,
     next.lastOpenedAt,

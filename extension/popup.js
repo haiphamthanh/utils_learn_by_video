@@ -1,6 +1,6 @@
 import {
   chooseSourceUrl,
-  cleanTitle,
+  cleanSourceTitle,
   detectSource,
   isWebUrl
 } from "./source-utils.js";
@@ -70,7 +70,7 @@ async function loadCurrentPage() {
       sourceType: source.type,
       platform: source.platform,
       url: normalizedUrl,
-      title: cleanTitle(context.title || tab.title || source.label)
+      title: cleanSourceTitle(context.title || tab.title || source.label, normalizedUrl)
     };
 
     sourceTypeLabel.textContent = source.label;
@@ -93,7 +93,20 @@ async function readPageContext(tabId, tab) {
     const results = await chrome.scripting.executeScript({
       target: { tabId },
       func: () => {
+        function visibleText(node) {
+          const text = (node?.innerText || node?.textContent || "").replace(/\s+/g, " ").trim();
+          if (!text || text.length < 4 || text.length > 180) return "";
+          if (/^(facebook|reels?|watch|home|notifications)$/i.test(text)) return "";
+          if (/^\d+[KMB]?\s*(comments?|shares?|likes?|views?)?$/i.test(text)) return "";
+          return text;
+        }
+
+        const visibleCandidates = [
+          ...document.querySelectorAll('[role="heading"], h1, h2, [data-ad-preview="message"], div[dir="auto"], span[dir="auto"]')
+        ].map(visibleText).filter(Boolean);
+
         const title =
+          visibleCandidates[0] ||
           document.querySelector('meta[property="og:title"]')?.content ||
           document.querySelector('meta[name="twitter:title"]')?.content ||
           document.title ||

@@ -14,7 +14,8 @@ import {
   importShareZip,
   listExportableLessons,
   listJournalEntries,
-  getJournalOverview
+  getJournalOverview,
+  updateLessonProgress
 } from "./api.js";
 import { createLessonPlayer } from "./lesson-player.js";
 
@@ -155,6 +156,13 @@ function lessonCardMarkup(item) {
   return `
     <article class="lesson-card" data-lesson-id="${escapeHtml(item.id)}" data-inbox-id="${escapeHtml(item.inboxItemId || "")}">
       <button class="lesson-card-delete" type="button" title="Delete lesson" data-lesson-delete>×</button>
+      <button
+        class="lesson-card-favorite${item.isFavorite ? " is-active" : ""}"
+        type="button"
+        title="${item.isFavorite ? "Remove favorite" : "Add favorite"}"
+        aria-pressed="${item.isFavorite ? "true" : "false"}"
+        data-lesson-favorite
+      >${item.isFavorite ? "Favorited" : "Favorite"}</button>
       <button class="lesson-card-open" type="button" aria-label="Open ${escapeHtml(item.title)}">
         <div class="lesson-card-poster">${poster}</div>
         <div class="lesson-card-body">
@@ -258,6 +266,24 @@ function bindLibraryCards(container) {
         await refreshLibrary();
       } catch (error) {
         window.alert(error.message);
+        btn.disabled = false;
+      }
+    });
+
+    card.querySelector("[data-lesson-favorite]")?.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const btn = event.currentTarget;
+      btn.disabled = true;
+      try {
+        const progress = await updateLessonProgress(card.dataset.lessonId, "TOGGLE_FAVORITE");
+        const isFavorite = Boolean(progress.isFavorite);
+        btn.classList.toggle("is-active", isFavorite);
+        btn.setAttribute("aria-pressed", String(isFavorite));
+        btn.title = isFavorite ? "Remove favorite" : "Add favorite";
+        btn.textContent = isFavorite ? "Favorited" : "Favorite";
+      } catch (error) {
+        window.alert(error.message);
+      } finally {
         btn.disabled = false;
       }
     });
@@ -565,7 +591,7 @@ journalSurprise?.addEventListener("click", async () => {
     // ignore
   } finally {
     journalSurprise.disabled = false;
-    journalSurprise.textContent = "🎲 Surprise me";
+    journalSurprise.textContent = "Surprise me";
   }
 });
 
@@ -600,8 +626,8 @@ function renderStatsPopup(overview) {
   const sm = overview.selectedMonth || {};
   const period = overview.period || "month";
 
-  const periodTabs = ["day", "week", "month"].map((p) =>
-    `<button class="filter-chip${period === p ? " is-active" : ""}" type="button" data-stats-period="${p}">${p === "day" ? "Day" : p === "week" ? "Week" : "Month"}</button>`
+  const periodTabs = ["week", "month"].map((p) =>
+    `<button class="filter-chip${period === p ? " is-active" : ""}" type="button" data-stats-period="${p}">${p === "week" ? "Week" : "Month"}</button>`
   ).join("");
 
   statsContent.innerHTML = `
@@ -616,12 +642,6 @@ function renderStatsPopup(overview) {
       <button class="secondary-action" type="button" data-stats-next>→</button>
     </div>
     ` : `<p class="eyebrow" style="text-align:center;margin-bottom:var(--space-md)">${escapeHtml(sm.label || "")}</p>`}
-
-    <div class="stats-legend">
-      <span class="stats-legend-item"><span class="stats-legend-swatch" style="background:var(--accent)"></span> Listens</span>
-      <span class="stats-legend-item"><span class="stats-legend-swatch" style="background:#d97706"></span> Loops</span>
-      <span class="stats-legend-total">Total: ${overview.monthTotal?.listens || 0} listens · ${overview.monthTotal?.loops || 0} loops</span>
-    </div>
 
     <div class="stats-section">
       <p class="eyebrow">Daily activity</p>
@@ -667,20 +687,27 @@ function drawHistogram(daily) {
   const el = document.querySelector("#stats-histogram");
   if (!el) return;
   const maxVal = Math.max(...daily.map((d) => Math.max(d.listens, d.loops)), 1);
+  const yMax = Math.ceil(maxVal * 1.15);
   const barW = Math.max(1, Math.floor(360 / daily.length) - 3);
   const gap = barW > 4 ? 2 : 1;
-  const padding = { top: 14, right: 6, bottom: 20, left: 6 };
+  const padding = { top: 14, right: 6, bottom: 20, left: 28 };
   const totalW = Math.max(280, daily.length * (barW + gap) + padding.left + padding.right);
-  const chartH = 120;
+  const chartH = 130;
   const barAreaH = chartH - padding.top - padding.bottom;
 
+  const ticks = 3;
   let svg = `<svg viewBox="0 0 ${totalW} ${chartH}" class="stats-svg" aria-label="Daily histogram">`;
-  svg += `<line x1="${padding.left}" y1="${padding.top}" x2="${totalW - padding.right}" y2="${padding.top}" stroke="var(--line)" stroke-width="0.5"/>`;
+  for (let t = 0; t <= ticks; t++) {
+    const y = padding.top + (barAreaH - (t / ticks) * barAreaH);
+    const val = Math.round((t / ticks) * yMax);
+    svg += `<line x1="${padding.left - 3}" y1="${y}" x2="${totalW - padding.right}" y2="${y}" stroke="var(--line)" stroke-width="0.5" stroke-dasharray="3,3"/>`;
+    svg += `<text x="${padding.left - 6}" y="${y + 4}" text-anchor="end" font-size="9" fill="var(--muted)">${val}</text>`;
+  }
 
   daily.forEach((d, i) => {
     const x = padding.left + i * (barW + gap);
-    const listenH = Math.max(1, (d.listens / maxVal) * barAreaH);
-    const loopH = Math.max(1, (d.loops / maxVal) * barAreaH);
+    const listenH = Math.max(1, (d.listens / yMax) * barAreaH);
+    const loopH = Math.max(1, (d.loops / yMax) * barAreaH);
     const halfW = barW / 2;
 
     svg += `<rect x="${x}" y="${padding.top + barAreaH - listenH}" width="${halfW - 0.5}" height="${listenH}" rx="1.5" fill="var(--accent)" opacity="0.8"><title>${d.label}: ${d.listens} listens</title></rect>`;
@@ -702,19 +729,20 @@ function drawLineChart(daily) {
   let cumulative = 0;
   const points = daily.map((d) => {
     cumulative += d.listens;
-    return { label: d.label, value: cumulative, listens: d.listens, loops: d.loops };
+    return { label: d.label, value: cumulative };
   });
 
   const maxVal = Math.max(points[points.length - 1]?.value || 0, 1);
+  const yMax = Math.ceil(maxVal * 1.2);
   const padding = { top: 8, right: 24, bottom: 20, left: 36 };
   const chartW = 340;
-  const chartH = 90;
+  const chartH = 100;
   const areaW = chartW - padding.left - padding.right;
   const areaH = chartH - padding.top - padding.bottom;
 
   const pts = points.map((p, i) => {
     const x = padding.left + (i / Math.max(points.length - 1, 1)) * areaW;
-    const y = padding.top + areaH - (p.value / maxVal) * areaH;
+    const y = padding.top + areaH - (p.value / yMax) * areaH;
     return `${x},${y}`;
   }).join(" ");
 
@@ -723,8 +751,14 @@ function drawLineChart(daily) {
     : "";
 
   let svg = `<svg viewBox="0 0 ${chartW} ${chartH}" class="stats-svg" aria-label="Cumulative listens">`;
-  svg += `<line x1="${padding.left}" y1="${padding.top}" x2="${padding.left}" y2="${padding.top + areaH}" stroke="var(--line)" stroke-width="0.5"/>`;
-  svg += `<line x1="${padding.left}" y1="${padding.top + areaH}" x2="${chartW - padding.right}" y2="${padding.top + areaH}" stroke="var(--line)" stroke-width="0.5"/>`;
+
+  const ticks = 3;
+  for (let t = 0; t <= ticks; t++) {
+    const y = padding.top + (areaH - (t / ticks) * areaH);
+    const val = Math.round((t / ticks) * yMax);
+    svg += `<line x1="${padding.left}" y1="${y}" x2="${chartW - padding.right}" y2="${y}" stroke="var(--line)" stroke-width="0.5" stroke-dasharray="3,3"/>`;
+    svg += `<text x="${padding.left - 6}" y="${y + 4}" text-anchor="end" font-size="9" fill="var(--muted)">${val}</text>`;
+  }
 
   if (fillPath) {
     svg += `<path d="${fillPath}" fill="var(--accent)" opacity="0.08"/>`;
@@ -734,7 +768,7 @@ function drawLineChart(daily) {
   const last = points[points.length - 1];
   if (last) {
     const lx = padding.left + ((points.length - 1) / Math.max(points.length - 1, 1)) * areaW;
-    const ly = padding.top + areaH - (last.value / maxVal) * areaH;
+    const ly = padding.top + areaH - (last.value / yMax) * areaH;
     svg += `<circle cx="${lx}" cy="${ly}" r="4" fill="var(--surface-strong)" stroke="var(--accent)" stroke-width="2"/>`;
     svg += `<text x="${lx}" y="${ly - 8}" text-anchor="end" font-size="10" font-weight="700" fill="var(--accent)">${last.value}</text>`;
   }

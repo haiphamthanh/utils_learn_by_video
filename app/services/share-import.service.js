@@ -27,6 +27,43 @@ function cleanTranscriptText(value) {
   return /[.!?]$/.test(capitalized) ? capitalized : `${capitalized}.`;
 }
 
+function collectLearningSegmentRefs(artifact) {
+  const refs = [];
+  const seen = new Set();
+  const add = (value) => {
+    if (!value || seen.has(value)) return;
+    seen.add(value);
+    refs.push(value);
+  };
+
+  for (const segment of artifact.transcript?.segments || []) add(segment.id);
+  for (const item of artifact.learning?.shadowingChunks || []) add(item.segmentId);
+  for (const item of artifact.learning?.meaning || []) add(item.segmentId);
+  for (const item of artifact.learning?.keyPhrases || []) {
+    for (const ref of item.sourceSegmentIds || []) add(ref);
+  }
+
+  return refs;
+}
+
+function rewriteLearningSegmentRefs(artifact, segmentIdMap) {
+  const mapOne = (value) => segmentIdMap.get(value) || value;
+
+  for (const item of artifact.learning?.shadowingChunks || []) {
+    item.segmentId = mapOne(item.segmentId);
+  }
+
+  for (const item of artifact.learning?.meaning || []) {
+    item.segmentId = mapOne(item.segmentId);
+  }
+
+  for (const item of artifact.learning?.keyPhrases || []) {
+    if (Array.isArray(item.sourceSegmentIds)) {
+      item.sourceSegmentIds = item.sourceSegmentIds.map(mapOne);
+    }
+  }
+}
+
 function validateManifest(manifest) {
   if (!manifest || typeof manifest !== "object") throw shareError("SHARE_MANIFEST_MISSING", "manifest.json missing in zip.", 400);
   if (manifest.format !== "enjoy-journal-share") {
@@ -123,6 +160,19 @@ function importOneLesson(db, zip, manifestEntry, options = {}) {
 
   const transcriptPathText = path.join(transcriptDir, `raw-import-${lessonId}.json`);
   const transcriptDurationMs = Number(meta.durationMs || lessonArtifact?.media?.durationMs || 0);
+  const sourceSegments = transcriptData?.segments || [];
+  const importedSegments = sourceSegments.map((segment, index) => ({
+    id: makeId("segment"),
+    sequence: segment.sequence ?? index,
+    startMs: segment.startMs,
+    endMs: segment.endMs,
+    text: segment.text,
+    cleanedText: segment.cleanedText || cleanTranscriptText(segment.text),
+    reviewedText: segment.reviewedText || null,
+    confidence: segment.confidence ?? null,
+    reviewStatus: segment.reviewStatus || "UNREVIEWED"
+  }));
+
   if (transcriptData) {
     fs.writeFileSync(
       transcriptPathText,
@@ -131,7 +181,9 @@ function importOneLesson(db, zip, manifestEntry, options = {}) {
         text: transcriptData.text || "",
         provider: transcriptData.provider || meta.provider || "import",
         model: transcriptData.model || meta.model || "import",
-        segments: (transcriptData.segments || []).map((segment) => ({
+        segments: importedSegments.map((segment) => ({
+          id: segment.id,
+          sequence: segment.sequence,
           startMs: segment.startMs,
           endMs: segment.endMs,
           text: segment.text,
@@ -154,6 +206,32 @@ function importOneLesson(db, zip, manifestEntry, options = {}) {
 
   if (importedLessonArtifact.transcript) {
     importedLessonArtifact.transcript.id = transcriptId;
+    const oldRefs = collectLearningSegmentRefs(importedLessonArtifact);
+    const segmentIdMap = new Map();
+
+    importedLessonArtifact.transcript.segments = (importedLessonArtifact.transcript.segments || importedSegments)
+      .map((segment, index) => {
+        const importedSegment = importedSegments[index];
+        if (!importedSegment) return segment;
+
+        if (segment.id) segmentIdMap.set(segment.id, importedSegment.id);
+        if (oldRefs[index]) segmentIdMap.set(oldRefs[index], importedSegment.id);
+
+        return {
+          ...segment,
+          id: importedSegment.id,
+          sequence: segment.sequence ?? importedSegment.sequence,
+          startMs: segment.startMs ?? importedSegment.startMs,
+          endMs: segment.endMs ?? importedSegment.endMs,
+          rawText: segment.rawText || importedSegment.text,
+          cleanedText: segment.cleanedText || importedSegment.cleanedText,
+          reviewedText: segment.reviewedText ?? importedSegment.reviewedText,
+          confidence: segment.confidence ?? importedSegment.confidence,
+          reviewStatus: segment.reviewStatus || importedSegment.reviewStatus
+        };
+      });
+
+    rewriteLearningSegmentRefs(importedLessonArtifact, segmentIdMap);
   }
 
   const importedLessonPath = path.join(lessonDir, `lesson-${lessonId}.json`);
@@ -239,16 +317,16 @@ function importOneLesson(db, zip, manifestEntry, options = {}) {
           id, transcript_id, sequence, start_ms, end_ms, raw_text, cleaned_text, reviewed_text, confidence
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
-      (transcriptData.segments || []).forEach((segment, index) => {
+      importedSegments.forEach((segment) => {
         insertSegment.run(
-          makeId("segment"),
+          segment.id,
           transcriptId,
-          segment.sequence ?? index,
+          segment.sequence,
           segment.startMs,
           segment.endMs,
           segment.text,
-          segment.cleanedText || cleanTranscriptText(segment.text),
-          segment.reviewedText || null,
+          segment.cleanedText,
+          segment.reviewedText,
           segment.confidence ?? null
         );
       });

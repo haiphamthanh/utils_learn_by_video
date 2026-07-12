@@ -17,6 +17,15 @@ function formatTime(milliseconds) {
   return `${minutes}:${seconds}`;
 }
 
+function durationLabel(milliseconds) {
+  if (!milliseconds) return "Duration unknown";
+  const totalSeconds = Math.max(1, Math.round(Number(milliseconds) / 1000));
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return seconds ? `${minutes}m ${seconds}s` : `${minutes}m`;
+}
+
 function effectiveText(segment) {
   return segment.reviewedText || segment.cleanedText || segment.rawText || "";
 }
@@ -27,6 +36,16 @@ function progressLabel(status) {
     LEARNING: "Learning",
     MASTERED: "Mastered"
   }[status] || status;
+}
+
+function sourceLabel(source = {}) {
+  return {
+    "facebook-reel": "Facebook Reel",
+    "youtube-short": "YouTube Short",
+    "other-url": "Web source",
+    "local-file": "Local file",
+    "uploaded-file": "Uploaded file"
+  }[source.type] || source.platform || "Source";
 }
 
 export function createLessonPlayer({ root, onClose }) {
@@ -178,11 +197,17 @@ export function createLessonPlayer({ root, onClose }) {
   function renderProgress() {
     const node = root.querySelector("[data-progress-summary]");
     const toggle = root.querySelector("[data-progress-toggle]");
+    const favorite = root.querySelector("[data-favorite-toggle]");
     if (!node || !toggle || !lesson) return;
 
     const progress = lesson.progress || {};
     node.textContent = `${progressLabel(progress.status)} · ${progress.listenCount || 0} listens · ${progress.shadowCount || 0} loops`;
     toggle.textContent = progress.status === "MASTERED" ? "Continue learning" : "Mark mastered";
+    if (favorite) {
+      favorite.classList.toggle("is-active", Boolean(progress.isFavorite));
+      favorite.setAttribute("aria-pressed", String(Boolean(progress.isFavorite)));
+      favorite.textContent = progress.isFavorite ? "Favorited" : "Favorite";
+    }
   }
 
   function switchTab(tabName) {
@@ -195,7 +220,17 @@ export function createLessonPlayer({ root, onClose }) {
   }
 
   function renderTranscript() {
-    return segments().map((segment) => `
+    const transcriptSegments = segments();
+    if (!transcriptSegments.length) {
+      return `
+        <div class="lesson-empty-panel">
+          <h3>No timed script available</h3>
+          <p>This lesson does not have transcript segments yet. Regenerate the transcript/lesson after media processing completes.</p>
+        </div>
+      `;
+    }
+
+    return transcriptSegments.map((segment) => `
       <button class="lesson-transcript-line" type="button" data-segment-id="${escapeHtml(segment.id)}">
         <span class="lesson-transcript-time">${formatTime(segment.startMs)}</span>
         <span>${escapeHtml(effectiveText(segment))}</span>
@@ -316,18 +351,31 @@ export function createLessonPlayer({ root, onClose }) {
   function render() {
     const meta = lesson.lesson || {};
     const learning = lesson.learning || {};
+    const source = lesson.source || {};
+    const mediaMeta = lesson.media || {};
 
     root.innerHTML = `
       <div class="lesson-page-header">
-        <button class="back-action" type="button" data-close-lesson>← Back</button>
-        <div class="lesson-title-block">
-          <p class="eyebrow">${escapeHtml(meta.topic || "Personal lesson")}</p>
-          <h1>${escapeHtml(meta.title || "Lesson")}</h1>
-          <p>${escapeHtml(learning.summaryVi || "")}</p>
+        <div class="lesson-header-topline">
+          <button class="back-action" type="button" data-close-lesson>Back</button>
+          ${source.url ? `<a class="source-link lesson-source-link" href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer">Open source</a>` : ""}
         </div>
-        <div class="lesson-progress-box">
-          <span data-progress-summary></span>
-          <button class="secondary-action" type="button" data-progress-toggle></button>
+        <div class="lesson-header-main">
+          <div class="lesson-title-block">
+            <div class="lesson-meta-row">
+              <span>${escapeHtml(sourceLabel(source))}</span>
+              <span>${escapeHtml(meta.topic || "Personal learning")}</span>
+              <span>${escapeHtml(meta.difficulty || "UNRATED")}</span>
+              <span>${escapeHtml(durationLabel(mediaMeta.durationMs))}</span>
+            </div>
+            <h1>${escapeHtml(meta.title || "Lesson")}</h1>
+            <p>${escapeHtml(learning.summaryVi || "Practice this lesson with synced transcript, phrases, and journal notes.")}</p>
+          </div>
+          <div class="lesson-progress-box">
+            <span data-progress-summary></span>
+            <button class="secondary-action favorite-action" type="button" data-favorite-toggle aria-pressed="false"></button>
+            <button class="secondary-action" type="button" data-progress-toggle></button>
+          </div>
         </div>
       </div>
 
@@ -428,6 +476,15 @@ export function createLessonPlayer({ root, onClose }) {
       const action = lesson.progress?.status === "MASTERED" ? "MARK_LEARNING" : "MARK_MASTERED";
       try {
         lesson.progress = await updateLessonProgress(lesson.lesson.id, action);
+        renderProgress();
+      } catch (error) {
+        window.alert(error.message);
+      }
+    });
+
+    root.querySelector("[data-favorite-toggle]")?.addEventListener("click", async () => {
+      try {
+        lesson.progress = await updateLessonProgress(lesson.lesson.id, "TOGGLE_FAVORITE");
         renderProgress();
       } catch (error) {
         window.alert(error.message);

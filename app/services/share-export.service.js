@@ -69,11 +69,6 @@ export async function createShareZip({ lessonIds, noMedia = false, outPath = nul
         if (cleanedArtifact.media[key] !== undefined) cleanedArtifact.media[key] = cleanedArtifact.media[key] ? "[media file]" : null;
       }
     }
-    if (Array.isArray(cleanedArtifact.transcript?.segments)) {
-      for (const segment of cleanedArtifact.transcript.segments) {
-        delete segment.id;
-      }
-    }
     zip.addFile(`${lessonDir}/lesson.json`, Buffer.from(JSON.stringify(cleanedArtifact, null, 2), "utf-8"));
 
     const transcript = artifact?.transcript;

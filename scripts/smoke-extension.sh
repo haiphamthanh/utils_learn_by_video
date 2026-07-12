@@ -37,10 +37,13 @@ echo "Checking extension JavaScript..."
 node --check extension/service-worker.js
 node --check extension/popup.js
 node --check extension/source-utils.js
+node --check extension/content-providers.js
+node --check extension/floating-save.js
 
 echo "Checking source detection and URL cleanup..."
 node --input-type=module <<'NODE'
 import {
+  cleanSourceTitle,
   chooseSourceUrl,
   detectSource,
   normalizeSourceUrl
@@ -54,6 +57,9 @@ if (facebook !== "https://www.facebook.com/reel/1681107386272978") {
 }
 if (detectSource(facebook).type !== "facebook-reel") {
   throw new Error("Facebook Reel detection failed.");
+}
+if (cleanSourceTitle("Facebook reel Facebook", facebook) !== "Facebook Reel 1681107386272978") {
+  throw new Error("Generic Facebook title cleanup failed.");
 }
 
 const youtube = normalizeSourceUrl(
@@ -81,6 +87,8 @@ echo "Checking popup files and icons..."
 for file in \
   extension/popup.html \
   extension/popup.css \
+  extension/content-providers.js \
+  extension/floating-save.js \
   extension/icons/icon-16.png \
   extension/icons/icon-32.png \
   extension/icons/icon-48.png \
