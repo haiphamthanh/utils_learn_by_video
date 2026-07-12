@@ -422,3 +422,294 @@ export function getLessonMedia(lessonId, kind) {
     size: fs.statSync(media.filePath).size
   };
 }
+
+export function listJournalEntries({ q = "" } = {}) {
+  const db = getDatabase();
+  const normalizedQuery = String(q || "").trim();
+
+  const rows = db.prepare(`
+    SELECT
+      je.id,
+      je.lesson_id AS lessonId,
+      je.entry_type AS entryType,
+      je.content,
+      je.updated_at AS updatedAt,
+      l.title AS lessonTitle,
+      l.summary_vi AS lessonSummaryVi,
+      l.inbox_item_id AS inboxItemId
+    FROM journal_entries je
+    JOIN lessons l ON l.id = je.lesson_id
+    WHERE l.id = (
+      SELECT l2.id FROM lessons l2
+      WHERE l2.inbox_item_id = l.inbox_item_id
+      ORDER BY l2.created_at DESC LIMIT 1
+    )
+      AND je.content IS NOT NULL
+      AND je.content != ''
+    ORDER BY je.updated_at DESC
+  `).all();
+
+  const journalReverse = Object.fromEntries(
+    Object.entries(JOURNAL_FIELDS).map(([field, type]) => [type, field])
+  );
+
+  const entries = rows.map((row) => ({
+    id: row.id,
+    lessonId: row.lessonId,
+    inboxItemId: row.inboxItemId,
+    field: journalReverse[row.entryType] || row.entryType,
+    entryType: row.entryType,
+    content: row.content,
+    lessonTitle: row.lessonTitle,
+    lessonSummaryVi: row.lessonSummaryVi,
+    updatedAt: row.updatedAt
+  }));
+
+  if (normalizedQuery) {
+    const needle = normalizedQuery.toLocaleLowerCase();
+    return entries.filter((entry) =>
+      entry.content.toLocaleLowerCase().includes(needle) ||
+      entry.lessonTitle.toLocaleLowerCase().includes(needle)
+    );
+  }
+
+  return entries;
+}
+
+function todayDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function daySeed() {
+  let hash = 0;
+  for (const char of todayDate()) {
+    hash = ((hash << 5) - hash) + char.charCodeAt(0);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+export function getJournalOverview({ month, year, period = "month" } = {}) {
+  const db = getDatabase();
+  const date = todayDate();
+  const seed = daySeed();
+
+  const now = new Date();
+  const selMonth = month != null ? Number(month) : now.getMonth() + 1;
+  const selYear = year != null ? Number(year) : now.getFullYear();
+
+  const stats = db.prepare(`
+    SELECT
+      COALESCE(SUM(lp.listen_count), 0) AS totalListens,
+      COALESCE(SUM(lp.shadow_count), 0) AS totalLoops,
+      (SELECT COUNT(*) FROM journal_entries WHERE entry_type = 'FAVORITE_PHRASE' AND content != '') AS totalPhrases
+    FROM learning_progress lp
+    JOIN lessons l ON l.id = lp.lesson_id
+    WHERE l.id = (
+      SELECT l2.id FROM lessons l2 WHERE l2.inbox_item_id = l.inbox_item_id ORDER BY l2.created_at DESC LIMIT 1
+    )
+  `).get();
+
+  const recentLessons = db.prepare(`
+    SELECT
+      l.id,
+      l.title,
+      l.inbox_item_id AS inboxItemId,
+      l.difficulty,
+      COALESCE(lp.learning_status, 'NEW') AS learningStatus,
+      lp.listen_count AS listenCount,
+      lp.shadow_count AS shadowCount,
+      lp.last_opened_at AS lastOpenedAt,
+      m.duration_ms AS durationMs,
+      CASE WHEN m.normalized_video_path IS NOT NULL THEN 1 ELSE 0 END AS hasVideo,
+      CASE WHEN m.poster_path IS NOT NULL THEN 1 ELSE 0 END AS hasPoster
+    FROM lessons l
+    JOIN inbox_items i ON i.id = l.inbox_item_id
+    LEFT JOIN media_assets m ON m.inbox_item_id = i.id
+    LEFT JOIN learning_progress lp ON lp.lesson_id = l.id
+    WHERE l.id = (
+      SELECT l2.id FROM lessons l2 WHERE l2.inbox_item_id = l.inbox_item_id ORDER BY l2.created_at DESC LIMIT 1
+    )
+      AND lp.last_opened_at IS NOT NULL
+    ORDER BY lp.last_opened_at DESC
+    LIMIT 8
+  `).all();
+
+  const mappedRecent = recentLessons.map((l) => ({
+    ...l,
+    hasVideo: Number(l.hasVideo) === 1,
+    hasPoster: Number(l.hasPoster) === 1,
+    mediaUrls: {
+      poster: l.hasPoster ? `/api/lessons/${l.id}/media/poster` : null
+    }
+  }));
+
+  const inProgress = mappedRecent.length > 0
+    ? mappedRecent.find((l) => l.learningStatus !== "MASTERED") || mappedRecent[0]
+    : null;
+
+  const randomLesson = db.prepare(`
+    SELECT
+      l.id,
+      l.title,
+      l.inbox_item_id AS inboxItemId,
+      l.difficulty,
+      m.duration_ms AS durationMs,
+      CASE WHEN m.poster_path IS NOT NULL THEN 1 ELSE 0 END AS hasPoster
+    FROM lessons l
+    JOIN inbox_items i ON i.id = l.inbox_item_id
+    LEFT JOIN media_assets m ON m.inbox_item_id = i.id
+    LEFT JOIN learning_progress lp ON lp.lesson_id = l.id
+    WHERE l.id = (
+      SELECT l2.id FROM lessons l2 WHERE l2.inbox_item_id = l.inbox_item_id ORDER BY l2.created_at DESC LIMIT 1
+    )
+      AND (lp.learning_status IS NULL OR lp.learning_status != 'MASTERED')
+    ORDER BY RANDOM()
+    LIMIT 1
+  `).get();
+
+  const phrases = db.prepare(`
+    SELECT je.content, je.lesson_id AS lessonId, l.title AS lessonTitle
+    FROM journal_entries je
+    JOIN lessons l ON l.id = je.lesson_id
+    WHERE je.entry_type = 'FAVORITE_PHRASE' AND je.content != ''
+      AND l.id = (
+        SELECT l2.id FROM lessons l2 WHERE l2.inbox_item_id = l.inbox_item_id ORDER BY l2.created_at DESC LIMIT 1
+      )
+    ORDER BY je.updated_at DESC
+  `).all();
+
+  let phraseOfDay = null;
+  if (phrases.length > 0) {
+    const index = seed % phrases.length;
+    phraseOfDay = {
+      content: phrases[index].content,
+      lessonId: phrases[index].lessonId,
+      lessonTitle: phrases[index].lessonTitle
+    };
+  }
+
+  const openedDates = db.prepare(`
+    SELECT DISTINCT substr(last_opened_at, 1, 10) AS openDate
+    FROM learning_progress
+    WHERE last_opened_at IS NOT NULL
+    ORDER BY openDate DESC
+  `).all().map((r) => r.openDate);
+
+  let streak = 0;
+  if (openedDates.length > 0) {
+    const todayStr = todayDate();
+    const checkDate = new Date(todayStr);
+    const dateSet = new Set(openedDates);
+
+    for (let i = 0; i < 365; i++) {
+      const d = checkDate.toISOString().slice(0, 10);
+      if (dateSet.has(d)) {
+        streak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        if (i === 0) break;
+        break;
+      }
+    }
+  }
+
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  const weekStartStr = weekStart.toISOString().slice(0, 10);
+
+  const weekStats = db.prepare(`
+    SELECT
+      COUNT(DISTINCT l.id) AS lessonsOpened,
+      COALESCE(SUM(lp.listen_count), 0) AS listens,
+      COALESCE(SUM(lp.shadow_count), 0) AS loops
+    FROM learning_progress lp
+    JOIN lessons l ON l.id = lp.lesson_id
+    WHERE lp.last_opened_at >= ?
+  `).get(weekStartStr);
+
+  const weekPhrases = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM journal_entries
+    WHERE entry_type = 'FAVORITE_PHRASE' AND content != ''
+      AND updated_at >= ?
+  `).get(weekStartStr);
+
+  const dailyActivity = [];
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  let periodLabel = "";
+
+  if (period === "day") {
+    const d = new Date();
+    const ds = d.toISOString().slice(0, 10);
+    const daily = db.prepare(`
+      SELECT COALESCE(SUM(lp.listen_count), 0) AS listens, COALESCE(SUM(lp.shadow_count), 0) AS loops
+      FROM learning_progress lp JOIN lessons l ON l.id = lp.lesson_id
+      WHERE substr(lp.last_opened_at, 1, 10) = ?
+        AND l.id = (SELECT l2.id FROM lessons l2 WHERE l2.inbox_item_id = l.inbox_item_id ORDER BY l2.created_at DESC LIMIT 1)
+    `).get(ds);
+    dailyActivity.push({ date: ds, label: d.toLocaleDateString("en-US", { weekday: "short" }), listens: daily.listens, loops: daily.loops });
+    periodLabel = d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+  } else if (period === "week") {
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const ds = d.toISOString().slice(0, 10);
+      const daily = db.prepare(`
+        SELECT COALESCE(SUM(lp.listen_count), 0) AS listens, COALESCE(SUM(lp.shadow_count), 0) AS loops
+        FROM learning_progress lp JOIN lessons l ON l.id = lp.lesson_id
+        WHERE substr(lp.last_opened_at, 1, 10) = ?
+          AND l.id = (SELECT l2.id FROM lessons l2 WHERE l2.inbox_item_id = l.inbox_item_id ORDER BY l2.created_at DESC LIMIT 1)
+      `).get(ds);
+      dailyActivity.push({ date: ds, label: d.toLocaleDateString("en-US", { weekday: "short" }), listens: daily.listens, loops: daily.loops });
+    }
+    periodLabel = "Last 7 days";
+  } else {
+    const daysInMonth = new Date(selYear, selMonth, 0).getDate();
+    for (let day = 1; day <= daysInMonth; day++) {
+      const ds = `${String(selYear).padStart(4, "0")}-${String(selMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      const daily = db.prepare(`
+        SELECT COALESCE(SUM(lp.listen_count), 0) AS listens, COALESCE(SUM(lp.shadow_count), 0) AS loops
+        FROM learning_progress lp JOIN lessons l ON l.id = lp.lesson_id
+        WHERE substr(lp.last_opened_at, 1, 10) = ?
+          AND l.id = (SELECT l2.id FROM lessons l2 WHERE l2.inbox_item_id = l.inbox_item_id ORDER BY l2.created_at DESC LIMIT 1)
+      `).get(ds);
+      dailyActivity.push({ date: ds, label: String(day), listens: daily.listens, loops: daily.loops });
+    }
+    periodLabel = `${monthNames[selMonth - 1]} ${selYear}`;
+  }
+
+  const monthTotal = {
+    listens: dailyActivity.reduce((s, d) => s + d.listens, 0),
+    loops: dailyActivity.reduce((s, d) => s + d.loops, 0)
+  };
+
+  return {
+    stats: {
+      totalListens: stats.totalListens,
+      totalLoops: stats.totalLoops,
+      totalPhrases: stats.totalPhrases,
+      streak
+    },
+    selectedMonth: { month: selMonth, year: selYear, label: periodLabel },
+    period,
+    monthTotal,
+    inProgress,
+    recentLessons: mappedRecent,
+    randomLesson: randomLesson ? {
+      ...randomLesson,
+      hasPoster: Number(randomLesson.hasPoster) === 1,
+      mediaUrls: {
+        poster: randomLesson.hasPoster ? `/api/lessons/${randomLesson.id}/media/poster` : null
+      }
+    } : null,
+    phraseOfDay,
+    weekRecap: {
+      lessonsOpened: weekStats.lessonsOpened,
+      listens: weekStats.listens,
+      loops: weekStats.loops,
+      phrasesSaved: weekPhrases.count
+    },
+    dailyActivity
+  };
+}

@@ -19,29 +19,55 @@
       </a>
 
       <nav class="nav" aria-label="Primary">
-        <button class="nav-link is-active" data-page="today">Today</button>
+        <button class="nav-link is-active" data-page="journal">Journal</button>
         <button class="nav-link" data-page="library">Library</button>
-        <button class="nav-link" data-page="journal">Journal</button>
         <button class="nav-link" data-page="share">Share</button>
       </nav>
     </header>
 
     <main class="page-shell">
-      <section id="today-page" class="page">
-        <div class="hero">
-          <p class="eyebrow">A quiet place to learn</p>
-          <h1>Keep the moment.<br />Learn the language.</h1>
-          <p class="hero-copy">
-            Save short videos that matter to you, then turn them into listening,
-            speaking and journal material without returning to the feed.
-          </p>
-
+      <section id="journal-page" class="page">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Your thoughts, phrases, reflections</p>
+            <h1>Journal</h1>
+          </div>
+          <div class="journal-heading-actions">
+            <button class="secondary-action" type="button" id="journal-stats-btn">📊 Stats</button>
+            <button class="primary-action" type="button" id="journal-surprise">🎲 Surprise me</button>
+          </div>
         </div>
 
-        <div class="today-panel">
-          <p class="eyebrow">Today</p>
-          <h2>Your next small moments</h2>
-          <div id="today-lessons" class="lesson-card-grid" aria-live="polite"></div>
+        <div id="journal-hero" class="journal-hero" hidden></div>
+
+        <div class="journal-carousel-row" id="journal-recent" hidden>
+          <p class="eyebrow">Continue learning</p>
+          <div class="journal-carousel" id="journal-recent-list"></div>
+        </div>
+
+        <div class="journal-layout">
+          <section class="journal-main">
+            <div class="journal-section-heading">
+              <p class="eyebrow">All your notes</p>
+              <label class="library-search">
+                <span class="sr-only">Search journal</span>
+                <input id="journal-search" type="search" placeholder="Search phrases, thoughts, examples…" />
+              </label>
+            </div>
+            <div id="journal-entries" aria-live="polite"></div>
+          </section>
+
+          <aside class="journal-sidebar">
+            <div class="journal-sidebar-card" id="journal-phrase-of-day" hidden>
+              <p class="eyebrow">Phrase of the day</p>
+              <blockquote id="journal-phrase-of-day-text"></blockquote>
+              <a id="journal-phrase-of-day-link" class="source-link" href="#">Open lesson</a>
+            </div>
+            <div class="journal-sidebar-card">
+              <p class="eyebrow">Favorite phrases</p>
+              <div id="journal-phrases"></div>
+            </div>
+          </aside>
         </div>
       </section>
 
@@ -72,17 +98,6 @@
 
       <section id="lesson-page" class="page" hidden>
         <div id="lesson-player-root"></div>
-      </section>
-
-      <section id="journal-page" class="page" hidden>
-        <div class="placeholder-page">
-          <p class="eyebrow">Your ideas, not a feed</p>
-          <h1>Journal</h1>
-          <p>
-            This area will later surface phrases, examples and thoughts collected
-            from completed lessons.
-          </p>
-        </div>
       </section>
 
       <section id="share-page" class="page" hidden>
@@ -154,6 +169,18 @@
         <div id="share-registry-list" class="inbox-list" aria-live="polite"></div>
       </section>
     </main>
+
+    <dialog id="stats-dialog" class="capture-dialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">Your learning journey</p>
+          <h2>Statistics</h2>
+        </div>
+        <button class="icon-button" type="button" data-close-stats aria-label="Close">×</button>
+      </div>
+
+      <div id="stats-content"></div>
+    </dialog>
 
     <dialog id="capture-dialog" class="capture-dialog">
       <form id="capture-form" method="dialog">

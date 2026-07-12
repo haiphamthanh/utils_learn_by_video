@@ -133,3 +133,16 @@ export function importShareZip(file, dryRun = false) {
 export function listExportableLessons() {
   return request("/api/share/exportable");
 }
+
+export function listJournalEntries(q = "") {
+  const query = q ? `?q=${encodeURIComponent(q)}` : "";
+  return request(`/api/journal${query}`);
+}
+
+export function getJournalOverview(period = "month", month, year) {
+  const params = new URLSearchParams();
+  params.set("period", period);
+  if (month != null) params.set("month", month);
+  if (year != null) params.set("year", year);
+  return request(`/api/journal/overview?${params.toString()}`);
+}

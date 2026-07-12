@@ -12,7 +12,9 @@ import {
   createShareExport,
   getShareExportDownloadUrl,
   importShareZip,
-  listExportableLessons
+  listExportableLessons,
+  listJournalEntries,
+  getJournalOverview
 } from "./api.js";
 import { createLessonPlayer } from "./lesson-player.js";
 
@@ -21,10 +23,30 @@ const navLinks = [...document.querySelectorAll(".nav-link")];
 const dialog = document.querySelector("#capture-dialog");
 const captureForm = document.querySelector("#capture-form");
 const captureError = document.querySelector("#capture-error");
-const todayLessons = document.querySelector("#today-lessons");
 const libraryLessons = document.querySelector("#library-lessons");
 const librarySearch = document.querySelector("#library-search");
 const libraryStatusFilters = [...document.querySelectorAll("[data-library-status]")];
+const journalEntries = document.querySelector("#journal-entries");
+const journalPhrases = document.querySelector("#journal-phrases");
+const journalSearch = document.querySelector("#journal-search");
+const journalHero = document.querySelector("#journal-hero");
+const journalRecent = document.querySelector("#journal-recent");
+const journalRecentList = document.querySelector("#journal-recent-list");
+const journalSurprise = document.querySelector("#journal-surprise");
+const journalPhraseOfDay = document.querySelector("#journal-phrase-of-day");
+const journalPhraseOfDayText = document.querySelector("#journal-phrase-of-day-text");
+const journalPhraseOfDayLink = document.querySelector("#journal-phrase-of-day-link");
+const journalStatsBtn = document.querySelector("#journal-stats-btn");
+const statsContent = document.querySelector("#stats-content");
+const statsDialog = document.querySelector("#stats-dialog");
+if (statsDialog) {
+  statsDialog.addEventListener("click", (e) => {
+    if (e.target === statsDialog) statsDialog.close();
+  });
+  for (const btn of document.querySelectorAll("[data-close-stats]")) {
+    btn.addEventListener("click", () => statsDialog?.close());
+  }
+}
 const lessonPlayerRoot = document.querySelector("#lesson-player-root");
 const shareExportsList = document.querySelector("#share-exports-list");
 const shareRegistryList = document.querySelector("#share-registry-list");
@@ -43,6 +65,7 @@ let shareLessonData = [];
 let shareSelectedIds = new Set();
 let currentLibraryStatus = "";
 let currentShareStatus = "";
+let journalOverviewCache = null;
 let librarySearchTimer = null;
 let returnPageAfterLesson = "library";
 
@@ -63,11 +86,11 @@ function showPage(pageName, { updateUrl = true } = {}) {
   });
 
   if (updateUrl && pageName !== "lesson") {
-    const url = pageName === "today" ? "/" : `/?page=${encodeURIComponent(pageName)}`;
+    const url = pageName === "journal" ? "/" : `/?page=${encodeURIComponent(pageName)}`;
     window.history.replaceState({}, "", url);
   }
 
-  if (pageName === "today") void refreshToday();
+  if (pageName === "journal") void refreshJournal();
   if (pageName === "library") void refreshLibrary();
   if (pageName === "share") void refreshShare();
 }
@@ -233,7 +256,6 @@ function bindLibraryCards(container) {
       try {
         await deleteInbox(inboxId);
         await refreshLibrary();
-        await refreshToday();
       } catch (error) {
         window.alert(error.message);
         btn.disabled = false;
@@ -262,36 +284,197 @@ function bindLibraryCards(container) {
   }
 }
 
-async function refreshToday() {
-  if (!todayLessons) return;
-  todayLessons.innerHTML = '<div class="empty-card"><p>Loading today…</p></div>';
+async function refreshJournal() {
+  if (!journalEntries) return;
+  journalEntries.innerHTML = '<div class="empty-card"><p>Loading journal…</p></div>';
+  if (journalPhrases) journalPhrases.innerHTML = "";
+  if (journalHero) journalHero.hidden = true;
+  if (journalRecent) journalRecent.hidden = true;
+  if (journalPhraseOfDay) journalPhraseOfDay.hidden = true;
 
   try {
-    const newLessons = await listLessons({ status: "NEW", limit: 5 });
-    const learningLessons = newLessons.length < 5
-      ? await listLessons({ status: "LEARNING", limit: 5 - newLessons.length })
-      : [];
-    const lessons = [...newLessons, ...learningLessons];
-    if (!lessons.length) {
-      todayLessons.innerHTML = `
-        <div class="empty-card">
-          <span class="empty-icon">◎</span>
-          <h3>Start with one meaningful video</h3>
-          <p>Add a source from the Library page and your next listening moment will appear here.</p>
-        </div>
-      `;
-      return;
-    }
+    const q = journalSearch?.value || "";
+    const [overview, entries] = await Promise.all([
+      getJournalOverview("month"),
+      listJournalEntries(q)
+    ]);
 
-    todayLessons.innerHTML = lessons.map(lessonCardMarkup).join("");
-    bindLibraryCards(todayLessons);
+    journalOverviewCache = overview;
+    renderJournalHero(overview);
+    renderJournalRecent(overview);
+    renderJournalPhraseOfDay(overview);
+    renderJournalEntries(entries);
+    renderJournalPhrases(entries);
   } catch (error) {
-    todayLessons.innerHTML = `
+    journalEntries.innerHTML = `
       <div class="empty-card">
-        <h3>Today could not be loaded</h3>
+        <h3>Journal could not be loaded</h3>
         <p>${escapeHtml(error.message)}</p>
       </div>
     `;
+  }
+}
+
+function renderJournalHero(overview) {
+  if (!journalHero) return;
+  const lesson = overview.inProgress;
+  if (!lesson) {
+    journalHero.hidden = true;
+    return;
+  }
+  journalHero.hidden = false;
+  const posterUrl = lesson.hasPoster
+    ? `<img src="${escapeHtml(lesson.mediaUrls?.poster || '')}" alt="" />`
+    : '<div class="lesson-card-poster-placeholder">EJ</div>';
+
+  journalHero.innerHTML = `
+    <button class="journal-hero-open" type="button" data-lesson-id="${escapeHtml(lesson.id)}">
+      <div class="journal-hero-media">${posterUrl}</div>
+      <div class="journal-hero-body">
+        <p class="eyebrow">Continue learning</p>
+        <h2>${escapeHtml(lesson.title)}</h2>
+        <div class="journal-hero-meta">
+          <span>${escapeHtml(lesson.learningStatus || "NEW")}</span>
+          <span>${lesson.listenCount || 0} listens · ${lesson.shadowCount || 0} loops</span>
+          <span>${escapeHtml(durationLabel(lesson.durationMs))}</span>
+        </div>
+        <span class="primary-action journal-hero-play">▶ Play</span>
+      </div>
+    </button>
+  `;
+  journalHero.querySelector("[data-lesson-id]")?.addEventListener("click", () => {
+    void openLesson(lesson.id, "journal");
+  });
+}
+
+function renderJournalRecent(overview) {
+  if (!journalRecent || !journalRecentList) return;
+  const lessons = (overview.recentLessons || []).slice(0, 8);
+  if (!lessons.length) {
+    journalRecent.hidden = true;
+    return;
+  }
+  journalRecent.hidden = false;
+  journalRecentList.innerHTML = lessons.map((lesson) => {
+    const poster = lesson.hasPoster
+      ? `<img src="${escapeHtml(lesson.mediaUrls?.poster || '')}" alt="" loading="lazy" />`
+      : '<div class="journal-recent-poster-placeholder">EJ</div>';
+    return `
+      <button class="journal-recent-card" type="button" data-lesson-id="${escapeHtml(lesson.id)}">
+        <div class="journal-recent-media">${poster}</div>
+        <div class="journal-recent-body">
+          <strong>${escapeHtml(lesson.title)}</strong>
+          <small>${escapeHtml(lesson.learningStatus)} · ${lesson.listenCount || 0} listens</small>
+        </div>
+      </button>
+    `;
+  }).join("");
+
+  for (const card of journalRecentList.querySelectorAll("[data-lesson-id]")) {
+    card.addEventListener("click", () => {
+      void openLesson(card.dataset.lessonId, "journal");
+    });
+  }
+}
+
+function renderJournalPhraseOfDay(overview) {
+  if (!journalPhraseOfDay || !journalPhraseOfDayText || !journalPhraseOfDayLink) return;
+  const phrase = overview.phraseOfDay;
+  if (!phrase) {
+    journalPhraseOfDay.hidden = true;
+    return;
+  }
+  journalPhraseOfDay.hidden = false;
+  journalPhraseOfDayText.textContent = phrase.content;
+  journalPhraseOfDayLink.href = "#";
+  journalPhraseOfDayLink.onclick = (e) => {
+    e.preventDefault();
+    void openLesson(phrase.lessonId, "journal");
+  };
+}
+
+function renderJournalEntries(entries) {
+  if (!journalEntries) return;
+  if (!entries.length) {
+    journalEntries.innerHTML = `
+      <div class="empty-card">
+        <span class="empty-icon">◎</span>
+        <h3>No journal entries yet</h3>
+        <p>Open a lesson and fill in the Journal tab to see your thoughts here.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const grouped = new Map();
+  for (const entry of entries) {
+    const key = entry.lessonId;
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        lessonId: entry.lessonId,
+        inboxItemId: entry.inboxItemId,
+        lessonTitle: entry.lessonTitle,
+        lessonSummaryVi: entry.lessonSummaryVi,
+        entries: []
+      });
+    }
+    grouped.get(key).entries.push(entry);
+  }
+
+  const fieldLabels = {
+    WHY_I_SAVED: "Why I saved",
+    MY_THOUGHT: "My thought",
+    FAVORITE_PHRASE: "Favorite phrase",
+    MY_EXAMPLE: "My example"
+  };
+
+  journalEntries.innerHTML = [...grouped.values()].map((group) => {
+    const entryCards = group.entries.map((entry) => `
+      <div class="journal-entry-card">
+        <span class="journal-entry-type">${escapeHtml(fieldLabels[entry.entryType] || entry.entryType)}</span>
+        <p class="journal-entry-content">${escapeHtml(entry.content)}</p>
+      </div>
+    `).join("");
+
+    return `
+      <article class="journal-lesson-group">
+        <button class="journal-lesson-header" type="button" data-lesson-id="${escapeHtml(group.lessonId)}">
+          <div>
+            <h3>${escapeHtml(group.lessonTitle)}</h3>
+            ${group.lessonSummaryVi ? `<p>${escapeHtml(group.lessonSummaryVi)}</p>` : ""}
+          </div>
+          <span class="journal-entry-count">${group.entries.length} note(s)</span>
+        </button>
+        <div class="journal-entry-list">${entryCards}</div>
+      </article>
+    `;
+  }).join("");
+
+  for (const header of journalEntries.querySelectorAll("[data-lesson-id]")) {
+    header.addEventListener("click", () => {
+      void openLesson(header.dataset.lessonId, "journal");
+    });
+  }
+}
+
+function renderJournalPhrases(entries) {
+  if (!journalPhrases) return;
+  const phraseEntries = entries.filter((e) => e.entryType === "FAVORITE_PHRASE");
+  if (phraseEntries.length) {
+    journalPhrases.innerHTML = phraseEntries.slice(0, 10).map((entry) => `
+      <button class="journal-phrase-chip" type="button" data-lesson-id="${escapeHtml(entry.lessonId)}">
+        "${escapeHtml(entry.content)}"
+        <small>${escapeHtml(entry.lessonTitle)}</small>
+      </button>
+    `).join("");
+
+    for (const chip of journalPhrases.querySelectorAll("[data-lesson-id]")) {
+      chip.addEventListener("click", () => {
+        void openLesson(chip.dataset.lessonId, "journal");
+      });
+    }
+  } else {
+    journalPhrases.innerHTML = '<p class="muted-copy">No favorite phrases saved yet.</p>';
   }
 }
 
@@ -361,6 +544,204 @@ librarySearch?.addEventListener("input", () => {
     void refreshLibrary();
   }, 250);
 });
+
+let journalSearchTimer = null;
+journalSearch?.addEventListener("input", () => {
+  if (journalSearchTimer) window.clearTimeout(journalSearchTimer);
+  journalSearchTimer = window.setTimeout(() => {
+    void refreshJournal();
+  }, 300);
+});
+
+journalSurprise?.addEventListener("click", async () => {
+  journalSurprise.disabled = true;
+  journalSurprise.textContent = "Rolling…";
+  try {
+    const overview = await getJournalOverview();
+    if (overview.randomLesson) {
+      void openLesson(overview.randomLesson.id, "journal");
+    }
+  } catch {
+    // ignore
+  } finally {
+    journalSurprise.disabled = false;
+    journalSurprise.textContent = "🎲 Surprise me";
+  }
+});
+
+journalStatsBtn?.addEventListener("click", async () => {
+  if (!statsDialog || !statsContent) return;
+  statsContent.innerHTML = '<p class="muted-copy">Loading stats…</p>';
+  statsDialog.showModal();
+  try {
+    const now = new Date();
+    await fetchAndRenderStats(now.getMonth() + 1, now.getFullYear());
+  } catch (error) {
+    statsContent.innerHTML = `<p class="muted-copy">Could not load stats: ${escapeHtml(error.message)}</p>`;
+  }
+});
+
+let currentStatsMonth = null;
+let currentStatsYear = null;
+let currentStatsPeriod = "month";
+
+async function fetchAndRenderStats(month, year, period) {
+  currentStatsMonth = month;
+  currentStatsYear = year;
+  currentStatsPeriod = period;
+  const overview = await getJournalOverview(period, month, year);
+  journalOverviewCache = overview;
+  renderStatsPopup(overview);
+}
+
+function renderStatsPopup(overview) {
+  if (!statsContent) return;
+  const daily = overview.dailyActivity || [];
+  const sm = overview.selectedMonth || {};
+  const period = overview.period || "month";
+
+  const periodTabs = ["day", "week", "month"].map((p) =>
+    `<button class="filter-chip${period === p ? " is-active" : ""}" type="button" data-stats-period="${p}">${p === "day" ? "Day" : p === "week" ? "Week" : "Month"}</button>`
+  ).join("");
+
+  statsContent.innerHTML = `
+    <div class="stats-period-row">
+      ${periodTabs}
+    </div>
+
+    ${period === "month" ? `
+    <div class="stats-month-nav">
+      <button class="secondary-action" type="button" data-stats-prev>←</button>
+      <span class="stats-month-label">${escapeHtml(sm.label || "")}</span>
+      <button class="secondary-action" type="button" data-stats-next>→</button>
+    </div>
+    ` : `<p class="eyebrow" style="text-align:center;margin-bottom:var(--space-md)">${escapeHtml(sm.label || "")}</p>`}
+
+    <div class="stats-legend">
+      <span class="stats-legend-item"><span class="stats-legend-swatch" style="background:var(--accent)"></span> Listens</span>
+      <span class="stats-legend-item"><span class="stats-legend-swatch" style="background:#d97706"></span> Loops</span>
+      <span class="stats-legend-total">Total: ${overview.monthTotal?.listens || 0} listens · ${overview.monthTotal?.loops || 0} loops</span>
+    </div>
+
+    <div class="stats-section">
+      <p class="eyebrow">Daily activity</p>
+      <div class="stats-chart" id="stats-histogram"></div>
+    </div>
+
+    <div class="stats-section">
+      <p class="eyebrow">Cumulative listens</p>
+      <div class="stats-chart" id="stats-line"></div>
+    </div>
+  `;
+
+  if (daily.length) {
+    drawHistogram(daily);
+    drawLineChart(daily);
+  }
+
+  const now = new Date();
+  const prevBtn = statsContent.querySelector("[data-stats-prev]");
+  const nextBtn = statsContent.querySelector("[data-stats-next]");
+  prevBtn?.addEventListener("click", async () => {
+    let m = sm.month - 1;
+    let y = sm.year;
+    if (m < 1) { m = 12; y--; }
+    await fetchAndRenderStats(m, y, "month");
+  });
+  nextBtn?.addEventListener("click", async () => {
+    let m = sm.month + 1;
+    let y = sm.year;
+    if (m > 12) { m = 1; y++; }
+    await fetchAndRenderStats(m, y, "month");
+  });
+
+  for (const btn of statsContent.querySelectorAll("[data-stats-period]")) {
+    btn.addEventListener("click", async () => {
+      const p = btn.dataset.statsPeriod;
+      await fetchAndRenderStats(now.getMonth() + 1, now.getFullYear(), p);
+    });
+  }
+}
+
+function drawHistogram(daily) {
+  const el = document.querySelector("#stats-histogram");
+  if (!el) return;
+  const maxVal = Math.max(...daily.map((d) => Math.max(d.listens, d.loops)), 1);
+  const barW = Math.max(1, Math.floor(360 / daily.length) - 3);
+  const gap = barW > 4 ? 2 : 1;
+  const padding = { top: 14, right: 6, bottom: 20, left: 6 };
+  const totalW = Math.max(280, daily.length * (barW + gap) + padding.left + padding.right);
+  const chartH = 120;
+  const barAreaH = chartH - padding.top - padding.bottom;
+
+  let svg = `<svg viewBox="0 0 ${totalW} ${chartH}" class="stats-svg" aria-label="Daily histogram">`;
+  svg += `<line x1="${padding.left}" y1="${padding.top}" x2="${totalW - padding.right}" y2="${padding.top}" stroke="var(--line)" stroke-width="0.5"/>`;
+
+  daily.forEach((d, i) => {
+    const x = padding.left + i * (barW + gap);
+    const listenH = Math.max(1, (d.listens / maxVal) * barAreaH);
+    const loopH = Math.max(1, (d.loops / maxVal) * barAreaH);
+    const halfW = barW / 2;
+
+    svg += `<rect x="${x}" y="${padding.top + barAreaH - listenH}" width="${halfW - 0.5}" height="${listenH}" rx="1.5" fill="var(--accent)" opacity="0.8"><title>${d.label}: ${d.listens} listens</title></rect>`;
+    svg += `<rect x="${x + halfW + 0.5}" y="${padding.top + barAreaH - loopH}" width="${halfW - 0.5}" height="${loopH}" rx="1.5" fill="#d97706" opacity="0.8"><title>${d.label}: ${d.loops} loops</title></rect>`;
+
+    if (daily.length <= 31 && i % Math.ceil(daily.length / 12) === 0) {
+      svg += `<text x="${x + halfW}" y="${chartH - 4}" text-anchor="middle" font-size="8" fill="var(--muted)">${d.label}</text>`;
+    }
+  });
+
+  svg += "</svg>";
+  el.innerHTML = svg;
+}
+
+function drawLineChart(daily) {
+  const el = document.querySelector("#stats-line");
+  if (!el) return;
+
+  let cumulative = 0;
+  const points = daily.map((d) => {
+    cumulative += d.listens;
+    return { label: d.label, value: cumulative, listens: d.listens, loops: d.loops };
+  });
+
+  const maxVal = Math.max(points[points.length - 1]?.value || 0, 1);
+  const padding = { top: 8, right: 24, bottom: 20, left: 36 };
+  const chartW = 340;
+  const chartH = 90;
+  const areaW = chartW - padding.left - padding.right;
+  const areaH = chartH - padding.top - padding.bottom;
+
+  const pts = points.map((p, i) => {
+    const x = padding.left + (i / Math.max(points.length - 1, 1)) * areaW;
+    const y = padding.top + areaH - (p.value / maxVal) * areaH;
+    return `${x},${y}`;
+  }).join(" ");
+
+  const fillPath = points.length > 1
+    ? `M${padding.left},${padding.top + areaH} L${pts} L${padding.left + areaW},${padding.top + areaH} Z`
+    : "";
+
+  let svg = `<svg viewBox="0 0 ${chartW} ${chartH}" class="stats-svg" aria-label="Cumulative listens">`;
+  svg += `<line x1="${padding.left}" y1="${padding.top}" x2="${padding.left}" y2="${padding.top + areaH}" stroke="var(--line)" stroke-width="0.5"/>`;
+  svg += `<line x1="${padding.left}" y1="${padding.top + areaH}" x2="${chartW - padding.right}" y2="${padding.top + areaH}" stroke="var(--line)" stroke-width="0.5"/>`;
+
+  if (fillPath) {
+    svg += `<path d="${fillPath}" fill="var(--accent)" opacity="0.08"/>`;
+  }
+  svg += `<polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+
+  const last = points[points.length - 1];
+  if (last) {
+    const lx = padding.left + ((points.length - 1) / Math.max(points.length - 1, 1)) * areaW;
+    const ly = padding.top + areaH - (last.value / maxVal) * areaH;
+    svg += `<circle cx="${lx}" cy="${ly}" r="4" fill="var(--surface-strong)" stroke="var(--accent)" stroke-width="2"/>`;
+    svg += `<text x="${lx}" y="${ly - 8}" text-anchor="end" font-size="10" font-weight="700" fill="var(--accent)">${last.value}</text>`;
+  }
+
+  svg += "</svg>";
+  el.innerHTML = svg;
+}
 
 captureForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -696,5 +1077,5 @@ shareImportInput?.addEventListener("change", async () => {
 });
 
 const initialPage = new URLSearchParams(window.location.search).get("page");
-const supportedInitialPages = new Set(["today", "library", "journal", "share"]);
-showPage(supportedInitialPages.has(initialPage) ? initialPage : "today", { updateUrl: false });
+const supportedInitialPages = new Set(["journal", "library", "share"]);
+showPage(supportedInitialPages.has(initialPage) ? initialPage : "journal", { updateUrl: false });

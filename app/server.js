@@ -12,6 +12,7 @@ import { recoverInterruptedAcquisitionJobs } from "./services/automation.service
 import { recoverInterruptedProcessingJobs } from "./services/pipeline.service.js";
 import { recoverInterruptedTranscriptionJobs } from "./services/transcription.service.js";
 import { recoverInterruptedLessonJobs } from "./services/lesson.service.js";
+import { listJournalEntries, getJournalOverview } from "./services/learning.service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,6 +43,27 @@ app.use("/api/health", createHealthRouter());
 app.use("/api/inbox", createInboxRouter());
 app.use("/api/lessons", createLessonsRouter());
 app.use("/api/share", createShareRouter());
+app.get("/api/journal/overview", (req, res, next) => {
+  try {
+    res.json({
+      data: getJournalOverview({
+        month: req.query.month,
+        year: req.query.year,
+        period: req.query.period || "month"
+      }),
+      error: null
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+app.get("/api/journal", (req, res, next) => {
+  try {
+    res.json({ data: listJournalEntries({ q: req.query.q || "" }), error: null });
+  } catch (error) {
+    next(error);
+  }
+});
 app.use(express.static(path.resolve(__dirname, "../public")));
 
 app.use((req, res, next) => {
