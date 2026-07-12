@@ -29,6 +29,7 @@ const captureError = document.querySelector("#capture-error");
 const libraryLessons = document.querySelector("#library-lessons");
 const librarySearch = document.querySelector("#library-search");
 const libraryStatusFilters = [...document.querySelectorAll("[data-library-status]")];
+const libraryFavoriteFilters = [...document.querySelectorAll("[data-library-favorite]")];
 const journalEntries = document.querySelector("#journal-entries");
 const journalPhrases = document.querySelector("#journal-phrases");
 const journalSearch = document.querySelector("#journal-search");
@@ -54,7 +55,6 @@ const lessonPlayerRoot = document.querySelector("#lesson-player-root");
 const shareExportsList = document.querySelector("#share-exports-list");
 const shareRegistryList = document.querySelector("#share-registry-list");
 const shareRefreshExports = document.querySelector("#share-refresh-exports");
-const shareStatusFilters = [...document.querySelectorAll("[data-share-status]")];
 const shareLessonList = document.querySelector("#share-lesson-list");
 const shareHideExported = document.querySelector("#share-hide-exported");
 const shareSelectAll = document.querySelector("#share-select-all");
@@ -63,6 +63,7 @@ const shareExportSelected = document.querySelector("#share-export-selected");
 const shareImportInput = document.querySelector("#share-import-input");
 const shareImportLabel = document.querySelector("#share-import-label");
 const shareActionStatus = document.querySelector("#share-action-status");
+const shareSelectionSummary = document.querySelector("#share-selection-summary");
 const metadataDialog = document.querySelector("#lesson-metadata-dialog");
 const metadataForm = document.querySelector("#lesson-metadata-form");
 const metadataError = document.querySelector("#metadata-error");
@@ -71,7 +72,7 @@ const metadataPromptButton = document.querySelector("#metadata-prompt-button");
 let shareLessonData = [];
 let shareSelectedIds = new Set();
 let currentLibraryStatus = "";
-let currentShareStatus = "";
+let currentLibraryFavorite = false;
 let journalOverviewCache = null;
 let librarySearchTimer = null;
 let returnPageAfterLesson = "library";
@@ -155,7 +156,29 @@ function bytesLabel(value) {
   return `${size.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 }
 
+function readingStatusLabel(status) {
+  return {
+    NEW: "New",
+    LEARNING: "Reading",
+    MASTERED: "Read"
+  }[status] || status || "New";
+}
+
+function readingStatus(item = {}) {
+  if (Number(item.viewCount || 0) < 5) return "NEW";
+  return item.learningStatus || "NEW";
+}
+
+function readingStatusIcon(status) {
+  return {
+    NEW: "○",
+    LEARNING: "◐",
+    MASTERED: "✓"
+  }[status] || "○";
+}
+
 function lessonCardMarkup(item) {
+  const status = readingStatus(item);
   const poster = item.media?.posterUrl
     ? `<img src="${escapeHtml(item.media.posterUrl)}" alt="" loading="lazy" />`
     : '<div class="lesson-card-poster-placeholder">EJ</div>';
@@ -174,14 +197,17 @@ function lessonCardMarkup(item) {
         <div class="lesson-card-poster">${poster}</div>
         <div class="lesson-card-body">
           <div class="lesson-card-meta">
-            <span>${escapeHtml(item.learningStatus || "NEW")}</span>
+            <span class="reading-status reading-status-${escapeHtml(status.toLowerCase())}">
+              <span class="reading-status-icon">${escapeHtml(readingStatusIcon(status))}</span>
+              ${escapeHtml(readingStatusLabel(status))}
+            </span>
             <span>${escapeHtml(durationLabel(item.durationMs))}</span>
           </div>
           <h3>${escapeHtml(item.title)}</h3>
           <p>${escapeHtml(item.summaryVi || "A small moment ready for listening practice.")}</p>
           <div class="lesson-card-footer">
             <span>${escapeHtml(item.difficulty || "UNRATED")}</span>
-            <span>${item.listenCount || 0} listens · ${item.shadowCount || 0} loops</span>
+            <span>${item.viewCount || 0} views</span>
           </div>
         </div>
       </button>
@@ -289,6 +315,9 @@ function bindLibraryCards(container) {
         btn.setAttribute("aria-pressed", String(isFavorite));
         btn.title = isFavorite ? "Remove favorite" : "Add favorite";
         btn.textContent = isFavorite ? "Favorited" : "Favorite";
+        if (currentLibraryFavorite && !isFavorite) {
+          await refreshLibrary();
+        }
       } catch (error) {
         window.alert(error.message);
       } finally {
@@ -392,6 +421,55 @@ function parseMetadataResponse(value) {
   return JSON.parse(trimmed);
 }
 
+function lessonPreviewEl() {
+  let el = document.querySelector("#lesson-hover-preview");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "lesson-hover-preview";
+    el.className = "lesson-hover-preview";
+    document.body.append(el);
+  }
+  return el;
+}
+
+function positionLessonPreview(event) {
+  const el = document.querySelector("#lesson-hover-preview");
+  if (!el || el.hidden) return;
+  const pad = 14;
+  const width = el.offsetWidth || 280;
+  const height = el.offsetHeight || 140;
+  const x = Math.min(window.innerWidth - width - pad, event.clientX + 16);
+  const y = Math.min(window.innerHeight - height - pad, event.clientY + 16);
+  el.style.left = `${Math.max(pad, x)}px`;
+  el.style.top = `${Math.max(pad, y)}px`;
+}
+
+function showLessonPreview(event) {
+  const target = event.currentTarget;
+  const el = lessonPreviewEl();
+  el.hidden = false;
+  const poster = target.dataset.previewPoster
+    ? `<img src="${escapeHtml(target.dataset.previewPoster)}" alt="" />`
+    : '<div class="lesson-hover-preview-placeholder">EJ</div>';
+  el.innerHTML = `
+    <div class="lesson-hover-preview-media">${poster}</div>
+    <div class="lesson-hover-preview-body">
+      <div class="lesson-card-meta">
+        <span>${escapeHtml(target.dataset.previewStatus || "New")}</span>
+        <span>${escapeHtml(target.dataset.previewViews || "0")} views</span>
+      </div>
+      <strong>${escapeHtml(target.dataset.previewTitle || "Lesson")}</strong>
+      <p>${escapeHtml(target.dataset.previewSummary || "No description yet.")}</p>
+    </div>
+  `;
+  positionLessonPreview(event);
+}
+
+function hideLessonPreview() {
+  const el = document.querySelector("#lesson-hover-preview");
+  if (el) el.hidden = true;
+}
+
 async function openMetadataDialog(lessonId) {
   if (!metadataDialog || !metadataForm) return;
   metadataError.hidden = true;
@@ -427,7 +505,7 @@ async function refreshJournal() {
     renderJournalRecent(overview);
     renderJournalPhraseOfDay(overview);
     renderJournalEntries(entries);
-    renderJournalPhrases(entries);
+    renderMostViewedLessons(overview);
   } catch (error) {
     journalEntries.innerHTML = `
       <div class="empty-card">
@@ -454,11 +532,10 @@ function renderJournalHero(overview) {
     <button class="journal-hero-open" type="button" data-lesson-id="${escapeHtml(lesson.id)}">
       <div class="journal-hero-media">${posterUrl}</div>
       <div class="journal-hero-body">
-        <p class="eyebrow">Continue learning</p>
         <h2>${escapeHtml(lesson.title)}</h2>
         <div class="journal-hero-meta">
-          <span>${escapeHtml(lesson.learningStatus || "NEW")}</span>
-          <span>${lesson.listenCount || 0} listens · ${lesson.shadowCount || 0} loops</span>
+          <span>${escapeHtml(readingStatusLabel(readingStatus(lesson)))}</span>
+          <span>${lesson.viewCount || 0} views</span>
           <span>${escapeHtml(durationLabel(lesson.durationMs))}</span>
         </div>
         <span class="primary-action journal-hero-play">▶ Play</span>
@@ -479,6 +556,7 @@ function renderJournalRecent(overview) {
   }
   journalRecent.hidden = false;
   journalRecentList.innerHTML = lessons.map((lesson) => {
+    const status = readingStatus(lesson);
     const poster = lesson.hasPoster
       ? `<img src="${escapeHtml(lesson.mediaUrls?.poster || '')}" alt="" loading="lazy" />`
       : '<div class="journal-recent-poster-placeholder">EJ</div>';
@@ -487,7 +565,7 @@ function renderJournalRecent(overview) {
         <div class="journal-recent-media">${poster}</div>
         <div class="journal-recent-body">
           <strong>${escapeHtml(lesson.title)}</strong>
-          <small>${escapeHtml(lesson.learningStatus)} · ${lesson.listenCount || 0} listens</small>
+          <small>${escapeHtml(readingStatusLabel(status))} · ${lesson.viewCount || 0} views</small>
         </div>
       </button>
     `;
@@ -580,14 +658,23 @@ function renderJournalEntries(entries) {
   }
 }
 
-function renderJournalPhrases(entries) {
+function renderMostViewedLessons(overview) {
   if (!journalPhrases) return;
-  const phraseEntries = entries.filter((e) => e.entryType === "FAVORITE_PHRASE");
-  if (phraseEntries.length) {
-    journalPhrases.innerHTML = phraseEntries.slice(0, 10).map((entry) => `
-      <button class="journal-phrase-chip" type="button" data-lesson-id="${escapeHtml(entry.lessonId)}">
-        "${escapeHtml(entry.content)}"
-        <small>${escapeHtml(entry.lessonTitle)}</small>
+  const lessons = overview.mostViewedLessons || [];
+  if (lessons.length) {
+    journalPhrases.innerHTML = lessons.slice(0, 10).map((lesson) => `
+      <button
+        class="journal-phrase-chip"
+        type="button"
+        data-lesson-id="${escapeHtml(lesson.id)}"
+        data-preview-title="${escapeHtml(lesson.title)}"
+        data-preview-summary="${escapeHtml(lesson.summaryVi || "")}"
+        data-preview-views="${escapeHtml(String(lesson.viewCount || 0))}"
+        data-preview-status="${escapeHtml(readingStatusLabel(readingStatus(lesson)))}"
+        data-preview-poster="${escapeHtml(lesson.mediaUrls?.poster || "")}"
+      >
+        ${escapeHtml(lesson.title)}
+        <small>${lesson.viewCount || 0} views · ${escapeHtml(readingStatusLabel(readingStatus(lesson)))}</small>
       </button>
     `).join("");
 
@@ -595,9 +682,12 @@ function renderJournalPhrases(entries) {
       chip.addEventListener("click", () => {
         void openLesson(chip.dataset.lessonId, "journal");
       });
+      chip.addEventListener("mouseenter", showLessonPreview);
+      chip.addEventListener("mousemove", positionLessonPreview);
+      chip.addEventListener("mouseleave", hideLessonPreview);
     }
   } else {
-    journalPhrases.innerHTML = '<p class="muted-copy">No favorite phrases saved yet.</p>';
+    journalPhrases.innerHTML = '<p class="muted-copy">No views recorded yet.</p>';
   }
 }
 
@@ -609,6 +699,7 @@ async function refreshLibrary() {
     const lessons = await listLessons({
       q: librarySearch?.value || "",
       status: currentLibraryStatus,
+      favorite: currentLibraryFavorite,
       limit: 200
     });
 
@@ -654,8 +745,26 @@ for (const button of document.querySelectorAll("[data-close-dialog]")) {
 for (const filter of libraryStatusFilters) {
   filter.addEventListener("click", async () => {
     currentLibraryStatus = filter.dataset.libraryStatus;
+    currentLibraryFavorite = false;
     libraryStatusFilters.forEach((item) => {
       item.classList.toggle("is-active", item === filter);
+    });
+    libraryFavoriteFilters.forEach((item) => {
+      item.classList.remove("is-active");
+      item.textContent = "♡";
+    });
+    await refreshLibrary();
+  });
+}
+
+for (const filter of libraryFavoriteFilters) {
+  filter.addEventListener("click", async () => {
+    currentLibraryStatus = "";
+    currentLibraryFavorite = true;
+    libraryStatusFilters.forEach((item) => item.classList.remove("is-active"));
+    libraryFavoriteFilters.forEach((item) => {
+      item.classList.toggle("is-active", item === filter);
+      item.textContent = item === filter ? "♥" : "♡";
     });
     await refreshLibrary();
   });
@@ -912,24 +1021,21 @@ async function refreshShareExports() {
     const entries = await listShareExports();
     if (!entries.length) {
       shareExportsList.innerHTML = `
-        <article class="inbox-card">
-          <div class="inbox-card-main">
-            <p class="muted-copy">No exports yet. Click "Export all lessons" above.</p>
+        <article class="share-compact-item">
+          <div>
+            <p class="muted-copy">No exports yet. Select lessons and create your first zip.</p>
           </div>
         </article>
       `;
       return;
     }
     shareExportsList.innerHTML = entries.map((entry) => `
-      <article class="inbox-card" data-share-export="${escapeHtml(entry.filename)}">
-        <div class="inbox-card-main">
-          <div class="inbox-meta">
-            <span class="source-label">${escapeHtml(entry.filename)}</span>
-            <span class="status-badge">${bytesLabel(entry.size)}</span>
-          </div>
-          <p class="source-note">Created ${escapeHtml(new Date(entry.createdAt).toLocaleString())}</p>
+      <article class="share-compact-item" data-share-export="${escapeHtml(entry.filename)}">
+        <div class="share-compact-main">
+          <strong>${escapeHtml(entry.filename)}</strong>
+          <span>${bytesLabel(entry.size)} · ${escapeHtml(new Date(entry.createdAt).toLocaleString())}</span>
         </div>
-        <div class="inbox-card-action">
+        <div class="share-compact-actions">
           <a class="process-action" type="button" data-share-export-download href="${getShareExportDownloadUrl(entry.filename)}" download>Download .zip</a>
           <button class="delete-source-action" type="button" data-share-export-delete>Delete export</button>
         </div>
@@ -960,14 +1066,14 @@ async function refreshShareExports() {
 
 async function refreshShareRegistry() {
   if (!shareRegistryList) return;
-  shareRegistryList.innerHTML = '<div class="empty-card"><p>Loading registry…</p></div>';
+  shareRegistryList.innerHTML = '<div class="empty-card"><p>Loading deleted lessons…</p></div>';
   try {
-    const entries = await listShareRegistry(currentShareStatus);
+    const entries = await listShareRegistry("deleted");
     if (!entries.length) {
       shareRegistryList.innerHTML = `
-        <article class="inbox-card">
-          <div class="inbox-card-main">
-            <p class="muted-copy">No entries yet. This fills automatically.</p>
+        <article class="share-compact-item">
+          <div>
+            <p class="muted-copy">No deleted lessons are being skipped during imports.</p>
           </div>
         </article>
       `;
@@ -975,28 +1081,18 @@ async function refreshShareRegistry() {
     }
 
     shareRegistryList.innerHTML = entries.map((entry) => {
-      const statusLabel = entry.deleted
-        ? '<span class="status-badge">Deleted</span>'
-        : entry.inboxItemId
-          ? '<span class="status-badge">Available</span>'
-          : '<span class="status-badge">Missing</span>';
       const slug = entry.slug && entry.slug.length > 60
         ? `${entry.slug.slice(0, 60)}…`
         : entry.slug;
       return `
-        <article class="inbox-card" data-share-slug="${escapeHtml(entry.slug)}">
-          <div class="inbox-card-main">
-            <div class="inbox-meta">
-              <span class="source-label">${escapeHtml(entry.title || "Untitled")}</span>
-              ${statusLabel}
-            </div>
-            <p class="source-note">${escapeHtml(entry.sourceUrl || "No source URL")}</p>
-            <p class="source-note">Slug: <code>${escapeHtml(slug)}</code></p>
+        <article class="share-compact-item" data-share-slug="${escapeHtml(entry.slug)}">
+          <div class="share-compact-main">
+            <strong>${escapeHtml(entry.title || "Untitled")}</strong>
+            <span>${escapeHtml(entry.sourceUrl || "No source URL")}</span>
+            <span>Slug: ${escapeHtml(slug)}</span>
           </div>
-          <div class="inbox-card-action">
-            ${entry.deleted
-              ? '<button class="auto-action" type="button" data-share-restore>Restore eligibility</button>'
-              : '<span class="muted-copy">No action needed</span>'}
+          <div class="share-compact-actions">
+            <button class="auto-action" type="button" data-share-restore>Restore eligibility</button>
           </div>
         </article>
       `;
@@ -1017,7 +1113,7 @@ async function refreshShareRegistry() {
   } catch (error) {
     shareRegistryList.innerHTML = `
       <div class="empty-card">
-        <h3>Registry could not be loaded</h3>
+        <h3>Deleted lessons could not be loaded</h3>
         <p>${escapeHtml(error.message)}</p>
       </div>
     `;
@@ -1030,16 +1126,6 @@ async function refreshShare() {
     void refreshShareRegistry(),
     void refreshShareLessonList()
   ]);
-}
-
-for (const filter of shareStatusFilters) {
-  filter.addEventListener("click", async () => {
-    currentShareStatus = filter.dataset.shareStatus;
-    shareStatusFilters.forEach((item) => {
-      item.classList.toggle("is-active", item === filter);
-    });
-    await refreshShareRegistry();
-  });
 }
 
 shareRefreshExports?.addEventListener("click", () => {
@@ -1059,8 +1145,8 @@ async function refreshShareLessonList() {
 
     if (!shareLessonData.length) {
       shareLessonList.innerHTML = `
-        <article class="inbox-card">
-          <div class="inbox-card-main">
+        <article class="share-empty-row">
+          <div>
             <p class="muted-copy">No lessons ready. Generate a lesson first.</p>
           </div>
         </article>
@@ -1070,12 +1156,14 @@ async function refreshShareLessonList() {
 
     if (hideExported && !visible.length) {
       shareLessonList.innerHTML = `
-        <article class="inbox-card">
-          <div class="inbox-card-main">
+        <article class="share-empty-row">
+          <div>
             <p class="muted-copy">All lessons already exported. Uncheck "Hide already exported" to re-export.</p>
           </div>
         </article>
       `;
+      updateExportButton();
+      return;
     }
 
     shareSelectedIds = new Set(
@@ -1085,25 +1173,21 @@ async function refreshShareLessonList() {
     shareLessonList.innerHTML = shareLessonData.map((lesson) => {
       const hiddenAttr = hideExported && lesson.alreadyExported ? " hidden" : "";
       return `
-        <article class="inbox-card share-lesson-card"${hiddenAttr} data-share-lesson="${escapeHtml(lesson.lessonId)}">
-          <div class="inbox-card-main">
-            <label class="share-lesson-label">
-              <input class="share-lesson-checkbox" type="checkbox"
-                data-lesson-id="${escapeHtml(lesson.lessonId)}"
-                ${shareSelectedIds.has(lesson.lessonId) ? "checked" : ""}
-              />
-              <div>
-                <div class="inbox-meta">
-                  <span class="source-label">${escapeHtml(lesson.title)}</span>
-                  <span class="status-badge">${escapeHtml(durationLabel(lesson.durationMs))}</span>
-                </div>
-                <p class="source-note">${escapeHtml(lesson.sourceUrl || "No URL")}</p>
-                ${lesson.alreadyExported
-                  ? `<p class="muted-copy">Exported ${escapeHtml(new Date(lesson.lastExportedAt).toLocaleString())}</p>`
-                  : ""}
-              </div>
-            </label>
-          </div>
+        <article class="share-lesson-card"${hiddenAttr} data-share-lesson="${escapeHtml(lesson.lessonId)}">
+          <label class="share-lesson-label">
+            <input class="share-lesson-checkbox" type="checkbox"
+              data-lesson-id="${escapeHtml(lesson.lessonId)}"
+              ${shareSelectedIds.has(lesson.lessonId) ? "checked" : ""}
+            />
+            <span class="share-lesson-content">
+              <strong>${escapeHtml(lesson.title)}</strong>
+              <span>${escapeHtml(lesson.sourceUrl || "No source URL")}</span>
+              ${lesson.alreadyExported
+                ? `<em>Exported ${escapeHtml(new Date(lesson.lastExportedAt).toLocaleString())}</em>`
+                : ""}
+            </span>
+            <span class="status-badge">${escapeHtml(durationLabel(lesson.durationMs))}</span>
+          </label>
         </article>
       `;
     }).join("");
@@ -1133,8 +1217,14 @@ async function refreshShareLessonList() {
 function updateExportButton() {
   if (!shareExportSelected) return;
   const count = shareSelectedIds.size;
+  const hideExported = shareHideExported?.checked ?? true;
+  const visibleCount = shareLessonData.filter((lesson) => !hideExported || !lesson.alreadyExported).length;
+  const exportedCount = shareLessonData.filter((lesson) => lesson.alreadyExported).length;
   shareExportSelected.textContent = count ? `Export selected (${count})` : "Export selected (0)";
   shareExportSelected.disabled = count === 0;
+  if (shareSelectionSummary) {
+    shareSelectionSummary.textContent = `${count} selected · ${visibleCount} visible · ${exportedCount} already exported`;
+  }
 }
 
 shareHideExported?.addEventListener("change", () => {

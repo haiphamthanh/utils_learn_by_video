@@ -116,6 +116,7 @@ function readProgress(lessonId, artifactProgress = {}) {
     SELECT
       learning_status AS status,
       is_favorite AS isFavorite,
+      view_count AS viewCount,
       listen_count AS listenCount,
       shadow_count AS shadowCount,
       last_opened_at AS lastOpenedAt,
@@ -134,6 +135,7 @@ function readProgress(lessonId, artifactProgress = {}) {
   return {
     status: artifactProgress.status || "NEW",
     isFavorite: Boolean(artifactProgress.isFavorite),
+    viewCount: Number(artifactProgress.viewCount || 0),
     listenCount: Number(artifactProgress.listenCount || 0),
     shadowCount: Number(artifactProgress.shadowCount || 0),
     lastOpenedAt: null,
@@ -146,6 +148,7 @@ function writeArtifactState(record, artifact, journal, progress) {
   artifact.progress = {
     status: progress.status,
     isFavorite: Boolean(progress.isFavorite),
+    viewCount: Number(progress.viewCount || 0),
     listenCount: progress.listenCount,
     shadowCount: progress.shadowCount,
     lastOpenedAt: progress.lastOpenedAt,
@@ -157,7 +160,7 @@ function writeArtifactState(record, artifact, journal, progress) {
   fs.renameSync(tempPath, record.lessonJsonPath);
 }
 
-export function listLessons({ q = "", status = "", limit = 100 } = {}) {
+export function listLessons({ q = "", status = "", favorite = false, limit = 100 } = {}) {
   const db = getDatabase();
   const normalizedQuery = String(q || "").trim();
   const normalizedStatus = String(status || "").trim().toUpperCase();
@@ -188,6 +191,7 @@ export function listLessons({ q = "", status = "", limit = 100 } = {}) {
       CASE WHEN m.poster_path IS NOT NULL THEN 1 ELSE 0 END AS hasPoster,
       COALESCE(lp.learning_status, 'NEW') AS learningStatus,
       COALESCE(lp.is_favorite, 0) AS isFavorite,
+      COALESCE(lp.view_count, 0) AS viewCount,
       COALESCE(lp.listen_count, 0) AS listenCount,
       COALESCE(lp.shadow_count, 0) AS shadowCount,
       lp.last_opened_at AS lastOpenedAt
@@ -208,8 +212,18 @@ export function listLessons({ q = "", status = "", limit = 100 } = {}) {
   const params = [];
 
   if (normalizedStatus) {
-    sql += " AND COALESCE(lp.learning_status, 'NEW') = ?";
-    params.push(normalizedStatus);
+    if (normalizedStatus === "NEW") {
+      sql += " AND COALESCE(lp.learning_status, 'NEW') != 'MASTERED' AND COALESCE(lp.view_count, 0) < 5";
+    } else if (normalizedStatus === "LEARNING") {
+      sql += " AND COALESCE(lp.learning_status, 'NEW') = 'LEARNING' AND COALESCE(lp.view_count, 0) >= 5";
+    } else {
+      sql += " AND COALESCE(lp.learning_status, 'NEW') = ?";
+      params.push(normalizedStatus);
+    }
+  }
+
+  if (favorite) {
+    sql += " AND COALESCE(lp.is_favorite, 0) = 1";
   }
 
   sql += `
@@ -434,6 +448,7 @@ export function recordLessonProgress(lessonId, action) {
 
   if (action === "OPENED") {
     next.status = current.status === "NEW" ? "LEARNING" : current.status;
+    next.viewCount = Number(current.viewCount || 0) + 1;
     next.lastOpenedAt = timestamp;
   } else if (action === "LISTEN_COMPLETED") {
     next.status = current.status === "MASTERED" ? "MASTERED" : "LEARNING";
@@ -454,13 +469,14 @@ export function recordLessonProgress(lessonId, action) {
 
   db.prepare(`
     INSERT INTO learning_progress (
-      lesson_id, learning_status, is_favorite, listen_count, shadow_count,
+      lesson_id, learning_status, is_favorite, view_count, listen_count, shadow_count,
       last_opened_at, last_completed_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(lesson_id)
     DO UPDATE SET
       learning_status = excluded.learning_status,
       is_favorite = excluded.is_favorite,
+      view_count = excluded.view_count,
       listen_count = excluded.listen_count,
       shadow_count = excluded.shadow_count,
       last_opened_at = excluded.last_opened_at,
@@ -469,6 +485,7 @@ export function recordLessonProgress(lessonId, action) {
     lessonId,
     next.status,
     Boolean(next.isFavorite) ? 1 : 0,
+    Number(next.viewCount || 0),
     next.listenCount,
     next.shadowCount,
     next.lastOpenedAt,
@@ -606,6 +623,7 @@ export function getJournalOverview({ month, year, period = "month" } = {}) {
       l.inbox_item_id AS inboxItemId,
       l.difficulty,
       COALESCE(lp.learning_status, 'NEW') AS learningStatus,
+      COALESCE(lp.view_count, 0) AS viewCount,
       lp.listen_count AS listenCount,
       lp.shadow_count AS shadowCount,
       lp.last_opened_at AS lastOpenedAt,
@@ -636,6 +654,32 @@ export function getJournalOverview({ month, year, period = "month" } = {}) {
   const inProgress = mappedRecent.length > 0
     ? mappedRecent.find((l) => l.learningStatus !== "MASTERED") || mappedRecent[0]
     : null;
+
+  const mostViewedLessons = db.prepare(`
+    SELECT
+      l.id,
+      l.title,
+      l.summary_vi AS summaryVi,
+      COALESCE(lp.view_count, 0) AS viewCount,
+      COALESCE(lp.learning_status, 'NEW') AS learningStatus,
+      CASE WHEN m.poster_path IS NOT NULL THEN 1 ELSE 0 END AS hasPoster
+    FROM lessons l
+    JOIN inbox_items i ON i.id = l.inbox_item_id
+    LEFT JOIN media_assets m ON m.inbox_item_id = i.id
+    LEFT JOIN learning_progress lp ON lp.lesson_id = l.id
+    WHERE l.id = (
+      SELECT l2.id FROM lessons l2 WHERE l2.inbox_item_id = l.inbox_item_id ORDER BY l2.created_at DESC LIMIT 1
+    )
+      AND COALESCE(lp.view_count, 0) > 0
+    ORDER BY COALESCE(lp.view_count, 0) DESC, lp.last_opened_at DESC
+    LIMIT 10
+  `).all().map((lesson) => ({
+    ...lesson,
+    hasPoster: Number(lesson.hasPoster) === 1,
+    mediaUrls: {
+      poster: lesson.hasPoster ? `/api/lessons/${lesson.id}/media/poster` : null
+    }
+  }));
 
   const randomLesson = db.prepare(`
     SELECT
@@ -785,6 +829,7 @@ export function getJournalOverview({ month, year, period = "month" } = {}) {
     monthTotal,
     inProgress,
     recentLessons: mappedRecent,
+    mostViewedLessons,
     randomLesson: randomLesson ? {
       ...randomLesson,
       hasPoster: Number(randomLesson.hasPoster) === 1,

@@ -65,10 +65,11 @@ export function getLesson(inboxId) {
   return request(`/api/inbox/${inboxId}/lesson`);
 }
 
-export function listLessons({ q = "", status = "", limit = 100 } = {}) {
+export function listLessons({ q = "", status = "", favorite = false, limit = 100 } = {}) {
   const params = new URLSearchParams();
   if (q) params.set("q", q);
   if (status) params.set("status", status);
+  if (favorite) params.set("favorite", "1");
   if (limit) params.set("limit", String(limit));
   const query = params.toString();
   return request(`/api/lessons${query ? `?${query}` : ""}`);

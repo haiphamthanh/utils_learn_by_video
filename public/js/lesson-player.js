@@ -184,8 +184,8 @@ export function createLessonPlayer({ root, onClose }) {
     const isMastered = progress.status === "MASTERED";
     toggle.classList.toggle("is-active", isMastered);
     toggle.setAttribute("aria-pressed", String(isMastered));
-    toggle.setAttribute("aria-label", isMastered ? "Continue learning" : "Mark mastered");
-    toggle.title = isMastered ? "Continue learning" : "Mark mastered";
+    toggle.setAttribute("aria-label", isMastered ? "Mark as reading" : "Mark as read");
+    toggle.title = isMastered ? "Mark as reading" : "Mark as read";
     toggle.innerHTML = iconSvg("check");
     if (favorite) {
       favorite.classList.toggle("is-active", Boolean(progress.isFavorite));

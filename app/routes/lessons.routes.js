@@ -52,6 +52,7 @@ export function createLessonsRouter() {
         data: listLessons({
           q: req.query.q || "",
           status: req.query.status || "",
+          favorite: req.query.favorite === "1" || req.query.favorite === "true",
           limit: req.query.limit || 100
         }),
         error: null

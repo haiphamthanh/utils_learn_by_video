@@ -29,7 +29,6 @@
       <section id="journal-page" class="page">
         <div class="section-heading personal-learning-heading">
           <div>
-            <p class="eyebrow">Personal learning</p>
             <h1>Your listening journal</h1>
             <p class="heading-copy">Review lessons, saved phrases, and the ideas worth returning to.</p>
           </div>
@@ -65,7 +64,7 @@
               <a id="journal-phrase-of-day-link" class="source-link" href="#">Open lesson</a>
             </div>
             <div class="journal-sidebar-card">
-              <p class="eyebrow">Favorite phrases</p>
+              <p class="eyebrow">Most favorite lessons</p>
               <div id="journal-phrases"></div>
             </div>
           </aside>
@@ -75,7 +74,6 @@
       <section id="library-page" class="page" hidden>
         <div class="section-heading library-heading">
           <div>
-            <p class="eyebrow">Everything worth returning to</p>
             <h1>Library</h1>
           </div>
           <div class="library-heading-actions">
@@ -91,8 +89,9 @@
         <div class="filter-row">
           <button class="filter-chip is-active" data-library-status="">All</button>
           <button class="filter-chip" data-library-status="NEW">New</button>
-          <button class="filter-chip" data-library-status="LEARNING">Learning</button>
-          <button class="filter-chip" data-library-status="MASTERED">Mastered</button>
+          <button class="filter-chip" data-library-status="LEARNING">Reading</button>
+          <button class="filter-chip" data-library-status="MASTERED">Read</button>
+          <button class="filter-chip favorite-filter-chip" data-library-favorite="true" aria-label="Favorite lessons">♡</button>
         </div>
         <div id="library-lessons" class="lesson-card-grid" aria-live="polite"></div>
       </section>
@@ -102,79 +101,97 @@
       </section>
 
       <section id="share-page" class="page" hidden>
-        <div class="section-heading">
+        <div class="section-heading share-page-heading">
           <div>
-            <p class="eyebrow">Share lessons between machines</p>
+            <p class="eyebrow">Move lessons between machines</p>
             <h1>Share</h1>
+            <p class="heading-copy">Package selected lessons into a zip, import a zip from another machine, and manage skipped deleted lessons.</p>
           </div>
         </div>
 
         <div class="share-help">
-          <p class="eyebrow">Workflow</p>
-          <ol>
-            <li>Select lessons below and click <strong>Export selected</strong> to create a zip.</li>
-            <li>Upload the zip to Google Drive (or click Import zip on the other machine).</li>
-          </ol>
-          <p class="muted-copy">
-            Already-exported lessons are hidden by default. Toggle "Show all" to re-export them.
-          </p>
-        </div>
-
-        <div class="section-heading share-sub-heading">
           <div>
-            <p class="eyebrow">Select lessons to package</p>
-            <h2>Lessons</h2>
+            <strong>1. Select</strong>
+            <span>Choose lessons with media, transcript, notes, and progress.</span>
           </div>
-          <div class="share-toolbar">
-            <label class="share-toggle-label">
-              <input type="checkbox" id="share-hide-exported" checked />
-              Hide already exported
-            </label>
-            <button class="secondary-action" type="button" id="share-select-all">Select all</button>
-            <button class="secondary-action" type="button" id="share-deselect-all">Deselect all</button>
-            <button class="primary-action" type="button" id="share-export-selected">Export selected (0)</button>
-          </div>
-        </div>
-        <div id="share-lesson-list" class="inbox-list" aria-live="polite"></div>
-
-        <div class="share-actions-row">
-          <label class="upload-action" id="share-import-area">
-            <span id="share-import-label">Import zip</span>
-            <input id="share-import-input" type="file" accept=".zip" hidden />
-          </label>
-          <span id="share-action-status" class="muted-copy"></span>
-        </div>
-
-        <div class="section-heading share-sub-heading">
           <div>
-            <p class="eyebrow">Export history</p>
-            <h2>Exports</h2>
+            <strong>2. Export</strong>
+            <span>Create a zip and move it with Drive, AirDrop, or any file sync.</span>
           </div>
-          <button class="primary-action" type="button" id="share-refresh-exports">
-            Refresh
-          </button>
-        </div>
-        <div id="share-exports-list" class="inbox-list" aria-live="polite"></div>
-
-        <div class="section-heading share-sub-heading">
           <div>
-            <p class="eyebrow">Known lessons across machines</p>
-            <h2>Registry</h2>
-          </div>
-          <div class="filter-row share-filter-row">
-            <button class="filter-chip is-active" data-share-status="">All</button>
-            <button class="filter-chip" data-share-status="available">Available</button>
-            <button class="filter-chip" data-share-status="deleted">Deleted</button>
+            <strong>3. Import</strong>
+            <span>Drop the zip on another machine to restore lessons locally.</span>
           </div>
         </div>
-        <div id="share-registry-list" class="inbox-list" aria-live="polite"></div>
+
+        <div class="share-layout">
+          <section class="share-panel share-panel-main">
+            <div class="share-panel-heading">
+              <div>
+                <p class="eyebrow">Export package</p>
+                <h2>Lessons</h2>
+                <p id="share-selection-summary" class="muted-copy">Select lessons to package.</p>
+              </div>
+              <button class="primary-action" type="button" id="share-export-selected">Export selected (0)</button>
+            </div>
+            <div class="share-toolbar">
+              <label class="share-toggle-label">
+                <input type="checkbox" id="share-hide-exported" checked />
+                Hide already exported
+              </label>
+              <button class="secondary-action" type="button" id="share-select-all">Select all</button>
+              <button class="secondary-action" type="button" id="share-deselect-all">Deselect all</button>
+            </div>
+            <div id="share-lesson-list" class="share-lesson-list" aria-live="polite"></div>
+          </section>
+
+          <aside class="share-side">
+            <section class="share-panel">
+              <div class="share-panel-heading">
+                <div>
+                  <p class="eyebrow">Import</p>
+                  <h2>Receive zip</h2>
+                </div>
+              </div>
+              <div class="share-actions-row">
+                <label class="upload-action" id="share-import-area">
+                  <span id="share-import-label">Import zip</span>
+                  <input id="share-import-input" type="file" accept=".zip" hidden />
+                </label>
+                <span id="share-action-status" class="muted-copy"></span>
+              </div>
+            </section>
+
+            <section class="share-panel">
+              <div class="share-panel-heading">
+                <div>
+                  <p class="eyebrow">Export history</p>
+                  <h2>Exports</h2>
+                </div>
+                <button class="secondary-action" type="button" id="share-refresh-exports">
+                  Refresh
+                </button>
+              </div>
+              <div id="share-exports-list" class="share-compact-list" aria-live="polite"></div>
+            </section>
+
+            <section class="share-panel">
+              <div class="share-panel-heading">
+                <div>
+                  <p class="eyebrow">Skipped during import</p>
+                  <h2>Deleted lessons</h2>
+                </div>
+              </div>
+              <div id="share-registry-list" class="share-compact-list" aria-live="polite"></div>
+            </section>
+          </aside>
+        </div>
       </section>
     </main>
 
     <dialog id="stats-dialog" class="capture-dialog">
       <div class="dialog-heading">
         <div>
-          <p class="eyebrow">Your learning journey</p>
           <h2>Statistics</h2>
         </div>
         <button class="icon-button" type="button" data-close-stats aria-label="Close">×</button>
@@ -187,8 +204,7 @@
       <form id="capture-form" method="dialog">
         <div class="dialog-heading">
           <div>
-            <p class="eyebrow">Save this moment</p>
-            <h2>Add to Library</h2>
+          <h2>Add to Library</h2>
           </div>
           <button class="icon-button" type="button" data-close-dialog aria-label="Close">
             ×
@@ -240,7 +256,6 @@
       <form id="lesson-metadata-form" method="dialog">
         <div class="dialog-heading">
           <div>
-            <p class="eyebrow">Library metadata</p>
             <div class="metadata-title-row">
               <h2>Update lesson</h2>
               <button class="icon-button metadata-prompt-action" type="button" id="metadata-prompt-button" aria-label="Copy AI prompt" title="Copy Prompt">

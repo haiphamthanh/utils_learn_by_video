@@ -372,12 +372,14 @@ function importOneLesson(db, zip, manifestEntry, options = {}) {
     const importedProgress = importedLessonArtifact.progress || {};
     db.prepare(`
       INSERT INTO learning_progress (
-        lesson_id, learning_status, listen_count, shadow_count,
+        lesson_id, learning_status, is_favorite, view_count, listen_count, shadow_count,
         last_opened_at, last_completed_at
-      ) VALUES (?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       lessonId,
       importedProgress.status || "NEW",
+      Boolean(importedProgress.isFavorite) ? 1 : 0,
+      Number(importedProgress.viewCount || 0),
       Number(importedProgress.listenCount || 0),
       Number(importedProgress.shadowCount || 0),
       importedProgress.lastOpenedAt || null,

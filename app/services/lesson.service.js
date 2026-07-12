@@ -260,6 +260,7 @@ function persistLesson({ inboxItemId, transcriptId, lessonId, outputPath, jobId 
       SELECT
         learning_status AS status,
         is_favorite AS isFavorite,
+        view_count AS viewCount,
         listen_count AS listenCount,
         shadow_count AS shadowCount,
           last_opened_at AS lastOpenedAt,
@@ -282,6 +283,7 @@ function persistLesson({ inboxItemId, transcriptId, lessonId, outputPath, jobId 
   const initialProgress = previousProgress || {
     status: artifactProgress.status || "NEW",
     isFavorite: Boolean(artifactProgress.isFavorite),
+    viewCount: Number(artifactProgress.viewCount || 0),
     listenCount: Number(artifactProgress.listenCount || 0),
     shadowCount: Number(artifactProgress.shadowCount || 0),
     lastOpenedAt: null,
@@ -329,13 +331,14 @@ function persistLesson({ inboxItemId, transcriptId, lessonId, outputPath, jobId 
 
     db.prepare(`
       INSERT INTO learning_progress (
-        lesson_id, learning_status, is_favorite, listen_count, shadow_count,
+        lesson_id, learning_status, is_favorite, view_count, listen_count, shadow_count,
         last_opened_at, last_completed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       lessonId,
       initialProgress.status,
       Boolean(initialProgress.isFavorite) ? 1 : 0,
+      Number(initialProgress.viewCount || 0),
       initialProgress.listenCount,
       initialProgress.shadowCount,
       initialProgress.lastOpenedAt,

@@ -76,6 +76,7 @@ def build_canonical_lesson(source_payload: dict[str, Any], generated: dict[str, 
         },
         "progress": {
             "status": "NEW",
+            "viewCount": 0,
             "listenCount": 0,
             "shadowCount": 0,
         },

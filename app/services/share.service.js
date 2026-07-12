@@ -201,6 +201,7 @@ export function listExportableShareLessons() {
       m.poster_path AS posterPath,
       m.duration_ms AS durationMs,
       COALESCE(lp.learning_status, 'NEW') AS learningStatus,
+      lp.view_count AS viewCount,
       lp.listen_count AS listenCount,
       lp.shadow_count AS shadowCount,
       lp.last_opened_at AS lastOpenedAt,
