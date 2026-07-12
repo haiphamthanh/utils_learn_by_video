@@ -2886,15 +2886,35 @@ button {
 
 .journal-stats-action {
   flex: 0 0 38px;
-  color: var(--accent-strong);
+  color: #4b5563;
 }
 
 .journal-stats-action svg rect {
-  fill: color-mix(in srgb, currentColor, transparent 82%);
+  stroke: none;
 }
 
-.journal-stats-action:hover svg rect {
-  fill: color-mix(in srgb, currentColor, transparent 72%);
+.journal-stats-action .stats-bar-red {
+  fill: #dc2626;
+}
+
+.journal-stats-action .stats-bar-violet {
+  fill: #7c3aed;
+}
+
+.journal-stats-action .stats-bar-amber {
+  fill: #f59e0b;
+}
+
+.journal-stats-action:hover .stats-bar-red {
+  fill: #b91c1c;
+}
+
+.journal-stats-action:hover .stats-bar-violet {
+  fill: #6d28d9;
+}
+
+.journal-stats-action:hover .stats-bar-amber {
+  fill: #d97706;
 }
 
 #journal-page.page {
