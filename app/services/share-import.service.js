@@ -49,11 +49,12 @@ function importOneLesson(db, zip, manifestEntry, options = {}) {
   const registry = getRegistryEntry(slug);
 
   if (registry) {
-    if (registry.deleted) {
-      return { slug, status: "skipped-deleted", title: registry.title };
-    }
     if (registry.inboxItemId) {
       return { slug, status: "skipped-existing", title: registry.title };
+    }
+    if (registry.deleted) {
+      db.prepare("UPDATE share_registry SET deleted = 0, inbox_item_id = NULL, updated_at = ? WHERE slug = ?")
+        .run(nowIso(), slug);
     }
   }
 

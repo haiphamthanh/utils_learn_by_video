@@ -71,7 +71,8 @@ app.listen(config.port, () => {
 
   setImmediate(async () => {
     try {
-      const { rebuildLastExportedMarks } = await import("./services/share.service.js");
+      const { backfillShareRegistryFromExisting, rebuildLastExportedMarks } = await import("./services/share.service.js");
+      backfillShareRegistryFromExisting();
       await rebuildLastExportedMarks();
     } catch {
       // non-critical

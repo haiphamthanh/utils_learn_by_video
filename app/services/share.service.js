@@ -297,6 +297,31 @@ export function markLessonsAsExported(slugs) {
   transaction();
 }
 
+export function backfillShareRegistryFromExisting() {
+  const lessons = listExportableShareLessons();
+  const now = nowIso();
+  const db = getDatabase();
+
+  const transaction = db.transaction(() => {
+    for (const lesson of lessons) {
+      const slug = buildSlug({ title: lesson.title, sourceUrl: lesson.sourceUrl });
+      const existing = db.prepare("SELECT slug FROM share_registry WHERE slug = ?").get(slug);
+      if (existing) {
+        db.prepare(`
+          UPDATE share_registry SET inbox_item_id = ?, lesson_id = ?, updated_at = ? WHERE slug = ?
+        `).run(lesson.inboxItemId, lesson.id, now, slug);
+      } else {
+        db.prepare(`
+          INSERT INTO share_registry (slug, title, source_url, inbox_item_id, lesson_id, deleted, imported_at, last_exported_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, 0, ?, NULL, ?)
+        `).run(slug, lesson.title, lesson.sourceUrl || null, lesson.inboxItemId, lesson.id, now, now);
+      }
+    }
+  });
+
+  transaction();
+}
+
 export function listExportedArtifacts() {
   const directory = path.join(config.dataDir, "exports");
   fs.mkdirSync(directory, { recursive: true });
