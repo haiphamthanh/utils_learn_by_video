@@ -2,6 +2,9 @@
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PID_FILE="$PROJECT_DIR/.server.pid"
+PORT_FILE="$PROJECT_DIR/.server.port"
+LOG_FILE="$PROJECT_DIR/.server.log"
 cd "$PROJECT_DIR"
 
 if [ -f .env ]; then
@@ -124,8 +127,49 @@ echo "Initializing database..."
 run_yarn migrate
 
 echo
-echo "Open http://localhost:${PORT:-3000}"
+echo "Open http://localhost:${PORT:-9090}"
 echo "Chrome extension: chrome://extensions → Load unpacked → ${PROJECT_DIR}/extension"
 echo
 
-run_yarn start
+export PORT="${PORT:-9090}"
+
+if [[ -f "$PID_FILE" ]]; then
+  EXISTING_PID="$(cat "$PID_FILE")"
+  if kill -0 "$EXISTING_PID" >/dev/null 2>&1; then
+    echo "Server is already running on PID $EXISTING_PID"
+    exit 0
+  fi
+  rm -f "$PID_FILE"
+fi
+
+nohup node app/server.js >"$LOG_FILE" 2>&1 &
+SERVER_PID=$!
+echo "$SERVER_PID" >"$PID_FILE"
+echo "$PORT" >"$PORT_FILE"
+
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  if ! kill -0 "$SERVER_PID" >/dev/null 2>&1; then
+    break
+  fi
+
+  if curl -s "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then
+    echo "Server started"
+    echo "PID: $SERVER_PID"
+    echo "URL: http://127.0.0.1:$PORT"
+    echo "Log: $LOG_FILE"
+    exit 0
+  fi
+
+  sleep 1
+done
+
+if ! kill -0 "$SERVER_PID" >/dev/null 2>&1; then
+  echo "Server process exited"
+  echo "Recent log:"
+  sed -n '1,40p' "$LOG_FILE"
+  rm -f "$PID_FILE" "$PORT_FILE"
+  exit 1
+fi
+
+echo "Server may still be starting. Check log: $LOG_FILE"
+echo "PID: $SERVER_PID"

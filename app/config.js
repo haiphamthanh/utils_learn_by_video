@@ -13,7 +13,7 @@ function defaultPythonBin() {
 }
 
 export const config = {
-  port: Number(process.env.PORT || 3000),
+  port: Number(process.env.PORT || 9090),
   dataDir: path.resolve(projectRoot, process.env.DATA_DIR || "./data"),
   maxUploadMb: Number(process.env.MAX_UPLOAD_MB || 200),
   autoProcessUrls: process.env.AUTO_PROCESS_URLS !== "false",
