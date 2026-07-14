@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 
-import { config } from "../config.js";
+import { config, toRelativeDataPath, toAbsoluteDataPath } from "../config.js";
 import { getDatabase } from "../db/database.js";
 import {
   buildSlug,
@@ -199,9 +199,9 @@ function importOneLesson(db, zip, manifestEntry, options = {}) {
   importedLessonArtifact.lesson.id = lessonId;
   importedLessonArtifact.lesson.createdAt = timestamp;
   importedLessonArtifact.media = importedLessonArtifact.media || {};
-  importedLessonArtifact.media.videoPath = mediaPaths.normalizedVideoPath;
-  importedLessonArtifact.media.audioPath = mediaPaths.normalizedAudioPath;
-  importedLessonArtifact.media.posterPath = mediaPaths.posterPath;
+  importedLessonArtifact.media.videoPath = mediaPaths.normalizedVideoPath ? toRelativeDataPath(mediaPaths.normalizedVideoPath) : null;
+  importedLessonArtifact.media.audioPath = mediaPaths.normalizedAudioPath ? toRelativeDataPath(mediaPaths.normalizedAudioPath) : null;
+  importedLessonArtifact.media.posterPath = mediaPaths.posterPath ? toRelativeDataPath(mediaPaths.posterPath) : null;
   importedLessonArtifact.media.durationMs = transcriptDurationMs;
 
   if (importedLessonArtifact.transcript) {
@@ -284,10 +284,10 @@ function importOneLesson(db, zip, manifestEntry, options = {}) {
       inboxId,
       meta.sourceTitle || title,
       mediaPaths.normalizedVideoPath ? "video/mp4" : "audio/wav",
-      mediaPaths.normalizedVideoPath || mediaPaths.normalizedAudioPath || "",
-      mediaPaths.normalizedVideoPath,
-      mediaPaths.normalizedAudioPath,
-      mediaPaths.posterPath,
+      toRelativeDataPath(mediaPaths.normalizedVideoPath || mediaPaths.normalizedAudioPath || ""),
+      mediaPaths.normalizedVideoPath ? toRelativeDataPath(mediaPaths.normalizedVideoPath) : null,
+      mediaPaths.normalizedAudioPath ? toRelativeDataPath(mediaPaths.normalizedAudioPath) : null,
+      mediaPaths.posterPath ? toRelativeDataPath(mediaPaths.posterPath) : null,
       transcriptDurationMs || null,
       null,
       timestamp
@@ -307,7 +307,7 @@ function importOneLesson(db, zip, manifestEntry, options = {}) {
         transcriptData.provider || provider,
         transcriptData.model || model,
         (transcriptData.segments || []).some((seg) => seg.reviewedText) ? "REVIEWED" : "CLEANED",
-        transcriptPathText,
+        toRelativeDataPath(transcriptPathText),
         timestamp,
         timestamp
       );
@@ -347,7 +347,7 @@ function importOneLesson(db, zip, manifestEntry, options = {}) {
       difficulty,
       provider,
       model,
-      importedLessonPath,
+      toRelativeDataPath(importedLessonPath),
       timestamp,
       timestamp
     );

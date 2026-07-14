@@ -4,7 +4,7 @@ import path from "node:path";
 import readline from "node:readline";
 import { spawn } from "node:child_process";
 
-import { config } from "../config.js";
+import { config, toRelativeDataPath, toAbsoluteDataPath } from "../config.js";
 import { getDatabase } from "../db/database.js";
 
 function nowIso() {
@@ -307,7 +307,7 @@ function persistLesson({ inboxItemId, transcriptId, lessonId, outputPath, jobId 
       lesson.difficulty || "UNRATED",
       lesson.provider,
       lesson.model,
-      outputPath,
+      toRelativeDataPath(outputPath),
       timestamp,
       timestamp
     );
@@ -600,7 +600,7 @@ export function getLesson(inboxItemId) {
     throw lessonError("LESSON_NOT_FOUND", "Lesson not found.", 404);
   }
 
-  const payload = JSON.parse(fs.readFileSync(lesson.lessonJsonPath, "utf-8"));
+  const payload = JSON.parse(fs.readFileSync(toAbsoluteDataPath(lesson.lessonJsonPath), "utf-8"));
   return payload;
 }
 

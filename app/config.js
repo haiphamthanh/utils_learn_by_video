@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const projectRoot = path.resolve(process.cwd());
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const projectRoot = path.resolve(__dirname, "..");
 
 function defaultPythonBin() {
   const unixVenvPython = path.join(projectRoot, ".venv", "bin", "python");
@@ -30,3 +33,15 @@ export const config = {
   lessonModel: process.env.LESSON_MODEL || "local-basic-v1",
   openaiLessonModel: process.env.OPENAI_LESSON_MODEL || "gpt-5.4-mini"
 };
+
+export function toRelativeDataPath(filePath) {
+  if (!filePath) return filePath;
+  if (!path.isAbsolute(filePath)) return filePath;
+  return path.relative(config.dataDir, filePath);
+}
+
+export function toAbsoluteDataPath(filePath) {
+  if (!filePath) return filePath;
+  if (path.isAbsolute(filePath)) return filePath;
+  return path.join(config.dataDir, filePath);
+}

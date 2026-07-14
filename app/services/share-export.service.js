@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { config } from "../config.js";
+import { config, toAbsoluteDataPath } from "../config.js";
 import {
   SHARE_MANIFEST,
   buildSlug,
@@ -26,7 +26,7 @@ export async function createShareZip({ lessonIds, noMedia = false, outPath = nul
     }
   }
 
-  selected = selected.filter((lesson) => lesson.lessonJsonPath && fs.existsSync(lesson.lessonJsonPath));
+  selected = selected.filter((lesson) => lesson.lessonJsonPath && fs.existsSync(toAbsoluteDataPath(lesson.lessonJsonPath)));
 
   if (!selected.length) {
     throw shareError("SHARE_NO_ARTIFACTS", "No lessons with valid artifacts found on disk.", 400);
@@ -37,7 +37,7 @@ export async function createShareZip({ lessonIds, noMedia = false, outPath = nul
   const manifestLessons = [];
 
   for (const lesson of selected) {
-    const artifact = JSON.parse(fs.readFileSync(lesson.lessonJsonPath, "utf-8"));
+    const artifact = JSON.parse(fs.readFileSync(toAbsoluteDataPath(lesson.lessonJsonPath), "utf-8"));
     const slug = buildSlug({ title: lesson.title, sourceUrl: lesson.sourceUrl });
     const lessonDir = `lessons/${slug}`;
 
@@ -93,9 +93,9 @@ export async function createShareZip({ lessonIds, noMedia = false, outPath = nul
 
     const mediaIncluded = { video: false, audio: false, poster: false };
     if (!noMedia) {
-      mediaIncluded.video = addMediaToZip(zip, lesson.videoPath, `${lessonDir}/media/video.mp4`);
-      mediaIncluded.audio = addMediaToZip(zip, lesson.audioPath, `${lessonDir}/media/audio.wav`);
-      mediaIncluded.poster = addMediaToZip(zip, lesson.posterPath, `${lessonDir}/media/poster.jpg`);
+      mediaIncluded.video = addMediaToZip(zip, toAbsoluteDataPath(lesson.videoPath), `${lessonDir}/media/video.mp4`);
+      mediaIncluded.audio = addMediaToZip(zip, toAbsoluteDataPath(lesson.audioPath), `${lessonDir}/media/audio.wav`);
+      mediaIncluded.poster = addMediaToZip(zip, toAbsoluteDataPath(lesson.posterPath), `${lessonDir}/media/poster.jpg`);
     }
 
     upsertRegistryEntry({

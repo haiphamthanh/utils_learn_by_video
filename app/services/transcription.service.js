@@ -4,7 +4,7 @@ import path from "node:path";
 import readline from "node:readline";
 import { spawn } from "node:child_process";
 
-import { config } from "../config.js";
+import { config, toRelativeDataPath, toAbsoluteDataPath } from "../config.js";
 import { getDatabase } from "../db/database.js";
 
 function nowIso() {
@@ -150,7 +150,7 @@ function persistTranscript({ inboxItemId, mediaAssetId, outputPath, jobId }) {
       payload.text || "",
       payload.provider,
       payload.model,
-      outputPath,
+      toRelativeDataPath(outputPath),
       timestamp,
       timestamp
     );
@@ -200,6 +200,7 @@ async function runTranscriptionJob({
   provider,
   model
 }) {
+  const resolvedAudioPath = toAbsoluteDataPath(audioPath);
   const transcriptDirectory = path.join(
     config.dataDir,
     "inbox",
@@ -211,7 +212,7 @@ async function runTranscriptionJob({
 
   const args = [
     path.join(config.projectRoot, "worker", "transcribe.py"),
-    "--input", audioPath,
+    "--input", resolvedAudioPath,
     "--output", outputPath,
     "--provider", provider,
     "--model", model,

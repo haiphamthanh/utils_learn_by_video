@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import { config } from "../config.js";
+import { config, toRelativeDataPath, toAbsoluteDataPath } from "../config.js";
 import { getDatabase } from "../db/database.js";
 import { probeMedia, prepareMedia } from "./media.service.js";
 
@@ -83,10 +83,11 @@ function failJob({ jobId, inboxItemId, error }) {
 
 async function runMediaJob({ jobId, inboxItemId, mediaAssetId, originalPath }) {
   const db = getDatabase();
+  const resolvedOriginalPath = toAbsoluteDataPath(originalPath);
 
   try {
     updateJob(jobId, { stage: "VALIDATE", progress: 10 });
-    const probe = await probeMedia(originalPath);
+    const probe = await probeMedia(resolvedOriginalPath);
 
     updateJob(jobId, { stage: "PREPARE_MEDIA", progress: 35 });
 
@@ -100,7 +101,7 @@ async function runMediaJob({ jobId, inboxItemId, mediaAssetId, originalPath }) {
     fs.rmSync(outputDirectory, { recursive: true, force: true });
 
     const artifacts = await prepareMedia({
-      inputPath: originalPath,
+      inputPath: resolvedOriginalPath,
       outputDirectory,
       probe
     });
@@ -114,9 +115,9 @@ async function runMediaJob({ jobId, inboxItemId, mediaAssetId, originalPath }) {
         SET normalized_video_path = ?, normalized_audio_path = ?, poster_path = ?, duration_ms = ?
         WHERE id = ?
       `).run(
-        artifacts.normalizedVideoPath,
-        artifacts.normalizedAudioPath,
-        artifacts.posterPath,
+        artifacts.normalizedVideoPath ? toRelativeDataPath(artifacts.normalizedVideoPath) : null,
+        artifacts.normalizedAudioPath ? toRelativeDataPath(artifacts.normalizedAudioPath) : null,
+        artifacts.posterPath ? toRelativeDataPath(artifacts.posterPath) : null,
         probe.durationMs,
         mediaAssetId
       );

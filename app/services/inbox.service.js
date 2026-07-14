@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import { config } from "../config.js";
+import { config, toRelativeDataPath, toAbsoluteDataPath } from "../config.js";
 
 import { getDatabase } from "../db/database.js";
 import { buildSlug, recordTombstone } from "./share.service.js";
@@ -267,7 +267,7 @@ export function attachMedia(inboxItemId, uploadedFile) {
       inboxItemId,
       uploadedFile.originalname,
       uploadedFile.mimetype,
-      uploadedFile.path,
+      toRelativeDataPath(uploadedFile.path),
       uploadedFile.size,
       createdAt
     );
@@ -287,8 +287,9 @@ export function attachMedia(inboxItemId, uploadedFile) {
     oldMedia?.normalizedAudioPath,
     oldMedia?.posterPath
   ]) {
-    if (oldPath && oldPath !== uploadedFile.path) {
-      fs.rmSync(oldPath, { force: true });
+    const resolvedPath = toAbsoluteDataPath(oldPath);
+    if (resolvedPath && resolvedPath !== uploadedFile.path) {
+      fs.rmSync(resolvedPath, { force: true });
     }
   }
 
@@ -396,7 +397,7 @@ export function deleteInboxItem(inboxItemId) {
   transaction();
 
   if (target.originalPath) {
-    fs.rmSync(target.originalPath, { force: true });
+    fs.rmSync(toAbsoluteDataPath(target.originalPath), { force: true });
   }
 
   fs.rmSync(path.join(config.dataDir, "inbox", inboxItemId), {

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { getDatabase } from "../db/database.js";
+import { toAbsoluteDataPath } from "../config.js";
 
 const JOURNAL_FIELDS = {
   whyISavedThis: "WHY_I_SAVED",
@@ -78,7 +79,8 @@ function getLessonRecord(lessonId) {
 }
 
 function readArtifact(record) {
-  if (!record.lessonJsonPath || !fs.existsSync(record.lessonJsonPath)) {
+  const artifactPath = toAbsoluteDataPath(record.lessonJsonPath);
+  if (!artifactPath || !fs.existsSync(artifactPath)) {
     throw learningError(
       "LESSON_ARTIFACT_NOT_FOUND",
       "The lesson artifact could not be found on disk.",
@@ -86,7 +88,7 @@ function readArtifact(record) {
     );
   }
 
-  return JSON.parse(fs.readFileSync(record.lessonJsonPath, "utf-8"));
+  return JSON.parse(fs.readFileSync(artifactPath, "utf-8"));
 }
 
 function readJournal(lessonId, artifactJournal = {}) {
@@ -195,9 +197,10 @@ function writeArtifactState(record, artifact, journal, progress) {
     lastCompletedAt: progress.lastCompletedAt
   };
 
-  const tempPath = `${record.lessonJsonPath}.tmp`;
+  const artifactPath = toAbsoluteDataPath(record.lessonJsonPath);
+  const tempPath = `${artifactPath}.tmp`;
   fs.writeFileSync(tempPath, JSON.stringify(artifact, null, 2), "utf-8");
-  fs.renameSync(tempPath, record.lessonJsonPath);
+  fs.renameSync(tempPath, artifactPath);
 }
 
 export function listLessons({ q = "", status = "", favorite = false, limit = 100 } = {}) {
@@ -306,7 +309,7 @@ export function listLessons({ q = "", status = "", favorite = false, limit = 100
 
       let generatedText = "";
       try {
-        const artifact = JSON.parse(fs.readFileSync(row.lessonJsonPath, "utf-8"));
+        const artifact = JSON.parse(fs.readFileSync(toAbsoluteDataPath(row.lessonJsonPath), "utf-8"));
         const learning = artifact.learning || {};
         generatedText = [
           ...(learning.keyPhrases || []).flatMap((item) => [
@@ -544,7 +547,7 @@ export function updateLessonMetadata(lessonId, payload = {}) {
     ...(artifact.source || {}),
     title: sourceTitle || title
   };
-  fs.writeFileSync(record.lessonJsonPath, JSON.stringify(artifact, null, 2), "utf-8");
+  fs.writeFileSync(toAbsoluteDataPath(record.lessonJsonPath), JSON.stringify(artifact, null, 2), "utf-8");
 
   return {
     title,
@@ -666,17 +669,20 @@ export function recordLessonProgress(lessonId, action) {
 
 export function getLessonMedia(lessonId, kind) {
   const record = getLessonRecord(lessonId);
+  const resolvedVideoPath = toAbsoluteDataPath(record.videoPath);
+  const resolvedAudioPath = toAbsoluteDataPath(record.audioPath);
+  const resolvedPosterPath = toAbsoluteDataPath(record.posterPath);
   const media = {
     video: {
-      filePath: record.videoPath,
+      filePath: resolvedVideoPath,
       contentType: "video/mp4"
     },
     audio: {
-      filePath: record.audioPath,
+      filePath: resolvedAudioPath,
       contentType: "audio/wav"
     },
     poster: {
-      filePath: record.posterPath,
+      filePath: resolvedPosterPath,
       contentType: "image/jpeg"
     }
   }[kind];
