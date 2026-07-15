@@ -1,8 +1,8 @@
 :root {
   color-scheme: light;
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #22211f;
-  background: #f6f2ea;
+  color: #2c2a27;
+  background: #eeede5;
 }
 
 * {
@@ -13,7 +13,7 @@ body {
   width: 380px;
   min-height: 510px;
   margin: 0;
-  background: #f6f2ea;
+  background: #eeede5;
 }
 
 button,
@@ -67,7 +67,7 @@ button {
 }
 
 .brand span:last-child {
-  color: #6f6a61;
+  color: #79756d;
   font-size: 12px;
 }
 
@@ -80,8 +80,8 @@ button {
 }
 
 .connection-status.is-checking {
-  background: #ece6dc;
-  color: #6f6a61;
+  background: #e7e4da;
+  color: #79756d;
 }
 
 .connection-status.is-online {
@@ -96,9 +96,9 @@ button {
 
 .source-card {
   padding: 18px;
-  border: 1px solid #ddd6ca;
+  border: 1px solid #e3dfd5;
   border-radius: 16px;
-  background: #fffdf8;
+  background: #f7f6f1;
 }
 
 .source-meta {
@@ -121,7 +121,7 @@ button {
 }
 
 .page-state {
-  color: #8b8378;
+  color: #8a847a;
 }
 
 .source-card h1 {
@@ -136,7 +136,7 @@ button {
   max-height: 44px;
   margin: 0;
   overflow: hidden;
-  color: #6f6a61;
+  color: #79756d;
   font-size: 12px;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -156,11 +156,11 @@ button {
 .field textarea,
 .field input {
   width: 100%;
-  border: 1px solid #ddd6ca;
+  border: 1px solid #e3dfd5;
   border-radius: 12px;
   padding: 11px 12px;
   background: white;
-  color: #22211f;
+  color: #2c2a27;
   outline: none;
 }
 
@@ -200,8 +200,8 @@ button {
 }
 
 .secondary-action {
-  background: #fffdf8;
-  color: #22211f;
+  background: #f7f6f1;
+  color: #2c2a27;
 }
 
 .message {
@@ -249,7 +249,7 @@ button {
 
 .saved-state p {
   margin: 10px auto 18px;
-  color: #6f6a61;
+  color: #79756d;
   line-height: 1.55;
 }
 
@@ -261,8 +261,8 @@ button {
 .settings-panel {
   margin-top: 18px;
   padding-top: 14px;
-  border-top: 1px solid #ddd6ca;
-  color: #6f6a61;
+  border-top: 1px solid #e3dfd5;
+  color: #79756d;
 }
 
 .settings-panel summary {

@@ -4,6 +4,13 @@ import path from "node:path";
 
 import { getDatabase } from "../db/database.js";
 import { toAbsoluteDataPath } from "../config.js";
+import {
+  listLessonTags,
+  listTags,
+  normalizeTagNames,
+  replaceLessonTags,
+  tagSlug
+} from "./tag.service.js";
 
 const JOURNAL_FIELDS = {
   whyISavedThis: "WHY_I_SAVED",
@@ -203,14 +210,17 @@ function writeArtifactState(record, artifact, journal, progress) {
   fs.renameSync(tempPath, artifactPath);
 }
 
-export function listLessons({ q = "", status = "", favorite = false, limit = 100 } = {}) {
+export function listLessons({ q = "", status = "", favorite = false, tag = "", limit = 100 } = {}) {
   const db = getDatabase();
   const normalizedQuery = String(q || "").trim();
   const normalizedStatus = String(status || "").trim().toUpperCase();
+  const normalizedTag = tagSlug(tag);
   const parsedLimit = Number(limit || 100);
   const safeLimit = Number.isFinite(parsedLimit)
     ? Math.max(1, Math.min(200, parsedLimit))
     : 100;
+
+  if (normalizedTag) listTags(db);
 
   let sql = `
     SELECT
@@ -275,6 +285,16 @@ export function listLessons({ q = "", status = "", favorite = false, limit = 100
     sql += " AND COALESCE(lp.is_favorite, 0) = 1";
   }
 
+  if (normalizedTag) {
+    sql += ` AND EXISTS (
+      SELECT 1
+      FROM lesson_tags lt
+      JOIN tags t ON t.id = lt.tag_id
+      WHERE lt.lesson_id = l.id AND t.slug = ?
+    )`;
+    params.push(normalizedTag);
+  }
+
   sql += `
     ORDER BY
       CASE WHEN lp.last_opened_at IS NULL THEN 0 ELSE 1 END,
@@ -306,6 +326,7 @@ export function listLessons({ q = "", status = "", favorite = false, limit = 100
         FROM lesson_notes
         WHERE lesson_id = ?
       `).get(row.id)?.value || "";
+      const tagText = listLessonTags(row.id, db).map((tagItem) => tagItem.name).join(" ");
 
       let generatedText = "";
       try {
@@ -331,6 +352,7 @@ export function listLessons({ q = "", status = "", favorite = false, limit = 100
         row.title,
         row.summaryVi,
         row.topic,
+        tagText,
         transcriptText,
         journalText,
         noteText,
@@ -339,19 +361,25 @@ export function listLessons({ q = "", status = "", favorite = false, limit = 100
     }).slice(0, safeLimit);
   }
 
-  return rows.map((row) => ({
-    ...row,
-    isFavorite: Boolean(row.isFavorite),
-    noteCount: Number(row.noteCount || 0),
-    lessonJsonPath: undefined,
-    transcriptId: undefined,
-    media: {
-      videoUrl: row.hasVideo ? `/api/lessons/${row.id}/media/video` : null,
-      audioUrl: row.hasAudio ? `/api/lessons/${row.id}/media/audio` : null,
-      posterUrl: row.hasPoster ? `/api/lessons/${row.id}/media/poster` : null
-    }
-  }));
+  return rows.map((row) => {
+    const tags = listLessonTags(row.id, db);
+    return {
+      ...row,
+      tags,
+      isFavorite: Boolean(row.isFavorite),
+      noteCount: Number(row.noteCount || 0),
+      lessonJsonPath: undefined,
+      transcriptId: undefined,
+      media: {
+        videoUrl: row.hasVideo ? `/api/lessons/${row.id}/media/video` : null,
+        audioUrl: row.hasAudio ? `/api/lessons/${row.id}/media/audio` : null,
+        posterUrl: row.hasPoster ? `/api/lessons/${row.id}/media/poster` : null
+      }
+    };
+  });
 }
+
+export { listTags };
 
 export function getLessonDetail(lessonId) {
   const record = getLessonRecord(lessonId);
@@ -359,6 +387,7 @@ export function getLessonDetail(lessonId) {
   const journal = readJournal(lessonId, artifact.journal || {});
   const progress = readProgress(lessonId, artifact.progress || {});
   const notes = listLessonNotes(lessonId);
+  const tags = listLessonTags(lessonId);
 
   return {
     ...artifact,
@@ -367,6 +396,7 @@ export function getLessonDetail(lessonId) {
     },
     journal,
     notes,
+    tags,
     progress,
     mediaUrls: {
       video: record.videoPath ? `/api/lessons/${lessonId}/media/video` : null,
@@ -506,6 +536,9 @@ export function updateLessonMetadata(lessonId, payload = {}) {
   const personalNote = String(payload.personalNote ?? record.personalNote ?? "")
     .trim()
     .slice(0, 4000);
+  const shouldReplaceTags = Object.prototype.hasOwnProperty.call(payload, "tags");
+  const requestedTags = shouldReplaceTags ? normalizeTagNames(payload.tags) : [];
+  let savedTags = listLessonTags(lessonId, db);
 
   if (!title) {
     throw learningError("LESSON_TITLE_REQUIRED", "Lesson title is required.");
@@ -531,6 +564,10 @@ export function updateLessonMetadata(lessonId, payload = {}) {
         WHERE id = ?
       `).run(sourceTitle || title, record.sourceId);
     }
+
+    if (shouldReplaceTags) {
+      savedTags = replaceLessonTags(lessonId, requestedTags, db, timestamp);
+    }
   });
 
   transaction();
@@ -541,7 +578,8 @@ export function updateLessonMetadata(lessonId, payload = {}) {
   };
   artifact.learning = {
     ...(artifact.learning || {}),
-    summaryVi
+    summaryVi,
+    tags: savedTags.map((tagItem) => tagItem.name)
   };
   artifact.source = {
     ...(artifact.source || {}),
@@ -553,8 +591,37 @@ export function updateLessonMetadata(lessonId, payload = {}) {
     title,
     summaryVi,
     sourceTitle: sourceTitle || title,
-    personalNote
+    personalNote,
+    tags: savedTags
   };
+}
+
+export function updateLessonTags(lessonId, payload = {}) {
+  const record = getLessonRecord(lessonId);
+  const artifact = readArtifact(record);
+  const db = getDatabase();
+  const timestamp = nowIso();
+  const requestedTags = normalizeTagNames(payload.tags);
+  let savedTags = [];
+
+  const transaction = db.transaction(() => {
+    savedTags = replaceLessonTags(lessonId, requestedTags, db, timestamp);
+    db.prepare(`
+      UPDATE lessons
+      SET updated_at = ?
+      WHERE id = ?
+    `).run(timestamp, lessonId);
+  });
+
+  transaction();
+
+  artifact.learning = {
+    ...(artifact.learning || {}),
+    tags: savedTags.map((tagItem) => tagItem.name)
+  };
+  fs.writeFileSync(toAbsoluteDataPath(record.lessonJsonPath), JSON.stringify(artifact, null, 2), "utf-8");
+
+  return { tags: savedTags };
 }
 
 export function updateLessonJournal(lessonId, payload = {}) {
@@ -715,9 +782,16 @@ export function listJournalEntries({ q = "" } = {}) {
       je.updated_at AS updatedAt,
       l.title AS lessonTitle,
       l.summary_vi AS lessonSummaryVi,
-      l.inbox_item_id AS inboxItemId
+      l.inbox_item_id AS inboxItemId,
+      COALESCE(lp.learning_status, 'NEW') AS learningStatus,
+      COALESCE(lp.is_favorite, 0) AS isFavorite,
+      COALESCE(lp.view_count, 0) AS viewCount,
+      CASE WHEN m.poster_path IS NOT NULL THEN 1 ELSE 0 END AS hasPoster
     FROM journal_entries je
     JOIN lessons l ON l.id = je.lesson_id
+    JOIN inbox_items i ON i.id = l.inbox_item_id
+    LEFT JOIN media_assets m ON m.inbox_item_id = i.id
+    LEFT JOIN learning_progress lp ON lp.lesson_id = l.id
     WHERE l.id = (
       SELECT l2.id FROM lessons l2
       WHERE l2.inbox_item_id = l.inbox_item_id
@@ -741,14 +815,22 @@ export function listJournalEntries({ q = "" } = {}) {
     content: row.content,
     lessonTitle: row.lessonTitle,
     lessonSummaryVi: row.lessonSummaryVi,
-    updatedAt: row.updatedAt
+    updatedAt: row.updatedAt,
+    learningStatus: row.learningStatus,
+    isFavorite: Boolean(row.isFavorite),
+    viewCount: Number(row.viewCount || 0),
+    media: {
+      posterUrl: row.hasPoster ? `/api/lessons/${row.lessonId}/media/poster` : null
+    },
+    tags: listLessonTags(row.lessonId, db)
   }));
 
   if (normalizedQuery) {
     const needle = normalizedQuery.toLocaleLowerCase();
     return entries.filter((entry) =>
       entry.content.toLocaleLowerCase().includes(needle) ||
-      entry.lessonTitle.toLocaleLowerCase().includes(needle)
+      entry.lessonTitle.toLocaleLowerCase().includes(needle) ||
+      entry.tags.some((tagItem) => tagItem.name.toLocaleLowerCase().includes(needle))
     );
   }
 

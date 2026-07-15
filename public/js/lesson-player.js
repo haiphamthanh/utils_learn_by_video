@@ -45,11 +45,13 @@ function iconSvg(name) {
   return icons[name] || "";
 }
 
-export function createLessonPlayer({ root, onClose }) {
+export function createLessonPlayer({ root, onClose, onStateChange }) {
   let lesson = null;
   let media = null;
   let selectedSegmentId = null;
   let activeSegmentId = null;
+  let activeTab = "listen";
+  let lastSavedSecond = null;
   let loopEnabled = false;
   let loopCount = 0;
   let loopGuard = false;
@@ -71,6 +73,8 @@ export function createLessonPlayer({ root, onClose }) {
     media = null;
     selectedSegmentId = null;
     activeSegmentId = null;
+    activeTab = "listen";
+    lastSavedSecond = null;
     loopEnabled = false;
     loopCount = 0;
     loopGuard = false;
@@ -98,6 +102,21 @@ export function createLessonPlayer({ root, onClose }) {
     ) || null;
   }
 
+  function emitPlayerState({ force = false } = {}) {
+    if (!lesson || typeof onStateChange !== "function") return;
+    const currentTimeSeconds = media ? Math.max(0, media.currentTime || 0) : 0;
+    const currentSecond = Math.floor(currentTimeSeconds);
+    if (!force && currentSecond === lastSavedSecond) return;
+    lastSavedSecond = currentSecond;
+    onStateChange({
+      lessonId: lesson.lesson.id,
+      activeTab,
+      selectedSegmentId,
+      currentTimeSeconds,
+      playbackRate: media?.playbackRate || 1
+    });
+  }
+
   function setSelectedSegment(segmentId, { seek = false, play = false } = {}) {
     const segment = segmentById(segmentId);
     if (!segment) return;
@@ -115,6 +134,7 @@ export function createLessonPlayer({ root, onClose }) {
         media.play().catch(() => {});
       }
     }
+    emitPlayerState({ force: true });
   }
 
   function setActiveSegment(segmentId) {
@@ -164,6 +184,7 @@ export function createLessonPlayer({ root, onClose }) {
   function onTimeUpdate() {
     const active = currentSegment();
     setActiveSegment(active?.id || null);
+    emitPlayerState();
 
     if (!loopEnabled || loopGuard || !media) return;
     const target = segmentById(selectedSegmentId);
@@ -217,12 +238,16 @@ export function createLessonPlayer({ root, onClose }) {
   }
 
   function switchTab(tabName) {
+    const supportedTabs = new Set(["listen", "meaning", "phrases", "journal"]);
+    if (!supportedTabs.has(tabName)) tabName = "listen";
+    activeTab = tabName;
     for (const button of root.querySelectorAll("[data-lesson-tab]")) {
       button.classList.toggle("is-active", button.dataset.lessonTab === tabName);
     }
     for (const panel of root.querySelectorAll("[data-lesson-panel]")) {
       panel.hidden = panel.dataset.lessonPanel !== tabName;
     }
+    emitPlayerState({ force: true });
   }
 
   function renderTranscript() {
@@ -627,6 +652,7 @@ export function createLessonPlayer({ root, onClose }) {
         for (const item of root.querySelectorAll("[data-speed]")) {
           item.classList.toggle("is-active", item === button);
         }
+        emitPlayerState({ force: true });
       });
     }
 
@@ -733,11 +759,40 @@ export function createLessonPlayer({ root, onClose }) {
     }
   }
 
-  async function open(lessonId) {
+  function restorePlayerState(state = {}) {
+    switchTab(state.activeTab || "listen");
+
+    if (state.selectedSegmentId && segmentById(state.selectedSegmentId)) {
+      setSelectedSegment(state.selectedSegmentId);
+    }
+
+    if (!media) return;
+    const rate = [0.75, 1, 1.25].includes(Number(state.playbackRate))
+      ? Number(state.playbackRate)
+      : 1;
+    media.playbackRate = rate;
+    for (const item of root.querySelectorAll("[data-speed]")) {
+      item.classList.toggle("is-active", Number(item.dataset.speed) === rate);
+    }
+
+    const savedTime = Math.max(0, Number(state.currentTimeSeconds || 0));
+    const applySavedTime = () => {
+      const maxTime = Number.isFinite(media.duration) ? Math.max(0, media.duration - 0.05) : savedTime;
+      media.currentTime = Math.min(savedTime, maxTime);
+      setActiveSegment(currentSegment()?.id || null);
+      emitPlayerState({ force: true });
+    };
+
+    if (media.readyState >= 1) applySavedTime();
+    else media.addEventListener("loadedmetadata", applySavedTime, { once: true });
+  }
+
+  async function open(lessonId, playerState = {}) {
     resetRuntime();
     root.innerHTML = '<div class="empty-card"><p>Loading lesson…</p></div>';
     lesson = await getLessonDetail(lessonId);
     render();
+    restorePlayerState(playerState);
 
     try {
       lesson.progress = await updateLessonProgress(lessonId, "OPENED");

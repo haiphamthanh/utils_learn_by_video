@@ -3,6 +3,7 @@ import {
   deleteInbox,
   getTranscript,
   listLessons,
+  listTags,
   startAutomaticAnalysis,
   updateTranscriptSegment,
   listShareRegistry,
@@ -17,9 +18,11 @@ import {
   getLessonDetail,
   getJournalOverview,
   updateLessonMetadata,
+  updateLessonTags,
   updateLessonProgress
 } from "./api.js";
 import { createLessonPlayer } from "./lesson-player.js";
+import { getUiSettings, updateUiSettings } from "./ui-settings.js";
 
 const pages = [...document.querySelectorAll(".page")];
 const navLinks = [...document.querySelectorAll(".nav-link")];
@@ -30,12 +33,16 @@ const libraryLessons = document.querySelector("#library-lessons");
 const librarySearch = document.querySelector("#library-search");
 const libraryStatusFilters = [...document.querySelectorAll("[data-library-status]")];
 const libraryFavoriteFilters = [...document.querySelectorAll("[data-library-favorite]")];
+const libraryTagList = document.querySelector("#library-tag-list");
+const libraryTagsMore = document.querySelector("#library-tags-more");
 const journalEntries = document.querySelector("#journal-entries");
 const journalPhrases = document.querySelector("#journal-phrases");
 const journalSearch = document.querySelector("#journal-search");
 const journalHero = document.querySelector("#journal-hero");
-const journalRecent = document.querySelector("#journal-recent");
-const journalRecentList = document.querySelector("#journal-recent-list");
+const journalResultCount = document.querySelector("#journal-result-count");
+const journalStatusFilters = [...document.querySelectorAll("[data-journal-status]")];
+const journalFavoriteFilters = [...document.querySelectorAll("[data-journal-favorite]")];
+const journalTagFilter = document.querySelector("#journal-tag-filter");
 const journalSurprise = document.querySelector("#journal-surprise");
 const journalPhraseOfDay = document.querySelector("#journal-phrase-of-day");
 const journalPhraseOfDayText = document.querySelector("#journal-phrase-of-day-text");
@@ -71,19 +78,77 @@ const metadataDialog = document.querySelector("#lesson-metadata-dialog");
 const metadataForm = document.querySelector("#lesson-metadata-form");
 const metadataError = document.querySelector("#metadata-error");
 const metadataPromptButton = document.querySelector("#metadata-prompt-button");
+const metadataExistingTags = document.querySelector("#metadata-existing-tags");
 
 let shareLessonData = [];
 let shareSelectedIds = new Set();
-let currentLibraryStatus = "";
-let currentLibraryFavorite = false;
+const supportedPages = new Set(["journal", "library", "share"]);
+const supportedLearningStatuses = new Set(["", "NEW", "LEARNING", "MASTERED"]);
+const restoredUiSettings = getUiSettings();
+let currentPage = supportedPages.has(restoredUiSettings.activePage)
+  ? restoredUiSettings.activePage
+  : "journal";
+let currentLibraryStatus = restoredUiSettings.library?.status || "";
+let currentLibraryFavorite = Boolean(restoredUiSettings.library?.favorite);
+let currentLibraryTag = restoredUiSettings.library?.tag || "";
+let libraryTagsExpanded = Boolean(restoredUiSettings.library?.tagsExpanded);
+let currentJournalStatus = supportedLearningStatuses.has(restoredUiSettings.journal?.status)
+  ? restoredUiSettings.journal.status
+  : "";
+let currentJournalFavorite = Boolean(restoredUiSettings.journal?.favorite);
+let currentJournalTag = restoredUiSettings.journal?.tag || "";
 let journalOverviewCache = null;
+let journalEntryCache = [];
+let availableTags = [];
 let librarySearchTimer = null;
 let libraryLessonMap = new Map();
 let metadataEditingLesson = null;
 
+if (journalSearch) journalSearch.value = restoredUiSettings.journal?.search || "";
+if (librarySearch) librarySearch.value = restoredUiSettings.library?.search || "";
+
+function syncJournalFilters() {
+  journalStatusFilters.forEach((item) => {
+    item.classList.toggle(
+      "is-active",
+      !currentJournalFavorite && item.dataset.journalStatus === currentJournalStatus
+    );
+  });
+  journalFavoriteFilters.forEach((item) => {
+    item.classList.toggle("is-active", currentJournalFavorite);
+  });
+  if (journalTagFilter) journalTagFilter.value = currentJournalTag;
+}
+
+function syncLibraryFilters() {
+  libraryStatusFilters.forEach((item) => {
+    item.classList.toggle(
+      "is-active",
+      !currentLibraryFavorite && item.dataset.libraryStatus === currentLibraryStatus
+    );
+  });
+  libraryFavoriteFilters.forEach((item) => {
+    item.classList.toggle("is-active", currentLibraryFavorite);
+    item.textContent = currentLibraryFavorite ? "♥" : "♡";
+  });
+}
+
+syncJournalFilters();
+syncLibraryFilters();
+
 const lessonPlayer = createLessonPlayer({
   root: lessonPlayerRoot,
-  onClose: () => lessonDialog?.close()
+  onClose: () => lessonDialog?.close(),
+  onStateChange: (playerState) => {
+    const savedLesson = getUiSettings().lesson;
+    if (!savedLesson || savedLesson.id !== playerState.lessonId) return;
+    updateUiSettings({
+      lesson: {
+        ...savedLesson,
+        player: playerState
+      }
+    });
+  }
 });
 
 function closeLessonDialog() {
@@ -97,6 +162,7 @@ if (lessonDialog) {
   lessonDialog.addEventListener("close", () => {
     lessonPlayer.reset();
     if (lessonPlayerRoot) lessonPlayerRoot.innerHTML = "";
+    updateUiSettings({ lesson: null });
   });
   document.querySelector("[data-close-lesson]")?.addEventListener("click", closeLessonDialog);
 }
@@ -115,10 +181,23 @@ if (lessonInfoDialog) {
   document.querySelector("[data-close-lesson-info]")?.addEventListener("click", closeLessonInfoDialog);
 }
 
-function showPage(pageName, { updateUrl = true } = {}) {
+function saveCurrentScroll() {
+  if (!supportedPages.has(currentPage)) return;
+  updateUiSettings({
+    scrollByPage: {
+      [currentPage]: Math.max(0, Math.round(window.scrollY))
+    }
+  });
+}
+
+async function showPage(pageName, { updateUrl = true, restoreScroll = true } = {}) {
+  if (!supportedPages.has(pageName)) pageName = "journal";
+  if (currentPage !== pageName) saveCurrentScroll();
   if (lessonDialog?.open) lessonDialog.close();
   if (lessonInfoDialog?.open) lessonInfoDialog.close();
   lessonPlayer.reset();
+  currentPage = pageName;
+  updateUiSettings({ activePage: pageName });
 
   pages.forEach((page) => {
     page.hidden = page.id !== `${pageName}-page`;
@@ -133,16 +212,30 @@ function showPage(pageName, { updateUrl = true } = {}) {
     window.history.replaceState({}, "", url);
   }
 
-  if (pageName === "journal") void refreshJournal();
-  if (pageName === "library") void refreshLibrary();
-  if (pageName === "share") void refreshShare();
+  if (pageName === "journal") await refreshJournal();
+  if (pageName === "library") await refreshLibrary();
+  if (pageName === "share") await refreshShare();
+
+  if (restoreScroll) {
+    const savedTop = Number(getUiSettings().scrollByPage?.[pageName] || 0);
+    window.requestAnimationFrame(() => window.scrollTo({ top: savedTop, behavior: "auto" }));
+  }
 }
 
-async function openLesson(lessonId, returnPage = "library") {
+async function openLesson(lessonId, returnPage = "library", playerState = null) {
+  updateUiSettings({
+    activePage: returnPage,
+    lesson: {
+      id: lessonId,
+      returnPage,
+      player: playerState || {}
+    }
+  });
   if (!lessonDialog?.open) lessonDialog?.showModal();
   try {
-    await lessonPlayer.open(lessonId);
+    await lessonPlayer.open(lessonId, playerState || {});
   } catch (error) {
+    updateUiSettings({ lesson: null });
     lessonPlayerRoot.innerHTML = `
       <div class="empty-card">
         <h3>Lesson could not be opened</h3>
@@ -176,6 +269,17 @@ function durationLabel(milliseconds) {
   const minutes = Math.floor(seconds / 60);
   const rest = seconds % 60;
   return rest ? `${minutes}m ${rest}s` : `${minutes} min`;
+}
+
+function formatJournalDate(value) {
+  if (!value) return "recently";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "recently";
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: date.getFullYear() === new Date().getFullYear() ? undefined : "numeric"
+  }).format(date);
 }
 
 function durationTone(milliseconds) {
@@ -215,6 +319,59 @@ function readingStatusBadgeMarkup(status) {
     <span class="reading-status reading-status-${escapeHtml(normalizedStatus.toLowerCase())}">
       ${escapeHtml(readingStatusLabel(normalizedStatus))}
     </span>
+  `;
+}
+
+function tagChipsMarkup(tags = [], { limit = 3 } = {}) {
+  const visible = tags.slice(0, limit);
+  if (!visible.length) return "";
+  const remaining = Math.max(0, tags.length - visible.length);
+  return `
+    <div class="lesson-tag-row">
+      ${visible.map((tag) => `<span class="lesson-tag">#${escapeHtml(tag.name)}</span>`).join("")}
+      ${remaining ? `<span class="lesson-tag lesson-tag-more">+${remaining}</span>` : ""}
+    </div>
+  `;
+}
+
+function tagNameKey(value) {
+  return String(value || "").trim().toLocaleLowerCase();
+}
+
+function lessonTagEditorMarkup(tags = []) {
+  const listId = "lesson-tag-suggestions";
+  return `
+    <div class="lesson-tag-editor" data-lesson-tag-editor>
+      <div class="lesson-tag-row lesson-info-tag-row">
+        ${tags.map((tag) => `
+          <span class="lesson-tag lesson-tag-editable">
+            #${escapeHtml(tag.name)}
+            <button
+              class="lesson-tag-remove"
+              type="button"
+              title="Remove tag"
+              aria-label="Remove ${escapeHtml(tag.name)}"
+              data-remove-lesson-tag="${escapeHtml(tag.name)}"
+            >×</button>
+          </span>
+        `).join("")}
+        <button class="lesson-tag-add" type="button" title="Add topic tag" aria-label="Add topic tag" data-add-lesson-tag>+</button>
+      </div>
+      <form class="lesson-tag-add-form" data-lesson-tag-form hidden>
+        <input
+          type="text"
+          name="tagName"
+          list="${listId}"
+          placeholder="New or existing topic"
+          autocomplete="off"
+        />
+        <datalist id="${listId}">
+          ${availableTags.map((tag) => `<option value="${escapeHtml(tag.name)}"></option>`).join("")}
+        </datalist>
+        <button class="primary-action" type="submit">Add</button>
+      </form>
+      <p class="lesson-tag-editor-error" data-lesson-tag-error hidden></p>
+    </div>
   `;
 }
 
@@ -280,6 +437,7 @@ function lessonCardMarkup(item) {
             </div>
             <div class="lesson-card-title-wrap">
               <h3>${escapeHtml(item.title)}</h3>
+              ${tagChipsMarkup(item.tags)}
             </div>
           </div>
           <p>${escapeHtml(item.summaryVi || "A small moment ready for listening practice.")}</p>
@@ -291,7 +449,7 @@ function lessonCardMarkup(item) {
       </button>
       <div class="lesson-card-actions">
         ${item.sourceUrl ? `<a class="source-link" href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noreferrer">Open source</a>` : ""}
-        <button class="secondary-action metadata-action" type="button" data-lesson-metadata>Update title</button>
+        <button class="secondary-action metadata-action" type="button" data-lesson-metadata>Update lesson</button>
         <button class="secondary-action regenerate-action" type="button" data-lesson-regenerate>Regenerate lesson</button>
         ${lessonNotesBadgeMarkup(item.noteCount)}
       </div>
@@ -304,44 +462,63 @@ async function renderTranscriptEditor(inboxId, content) {
   content.innerHTML = "<p class=\"muted-copy\">Loading transcript…</p>";
   try {
     const transcript = await getTranscript(inboxId);
-    content.innerHTML = transcript.segments.map((segment) => {
+    const originalText = new Map();
+    const segmentRows = transcript.segments.map((segment) => {
       const effective = segment.reviewedText || segment.cleanedText || segment.rawText;
+      originalText.set(segment.id, effective);
       return `
         <div class="transcript-segment" data-segment-id="${segment.id}">
           <span class="segment-time">${formatTime(segment.startMs)}</span>
           <div class="segment-editor">
             <textarea rows="2">${escapeHtml(effective)}</textarea>
-            <div class="segment-actions">
-              <span class="segment-origin">${segment.reviewStatus === "REVIEWED" ? "Reviewed" : "Cleaned"}</span>
-              <button class="segment-save" type="button">Save correction</button>
-            </div>
+            <span class="segment-origin">${segment.reviewStatus === "REVIEWED" ? "Reviewed" : "Cleaned"}</span>
           </div>
         </div>
       `;
     }).join("");
 
-    for (const row of content.querySelectorAll(".transcript-segment")) {
-      const textarea = row.querySelector("textarea");
-      const saveButton = row.querySelector(".segment-save");
-      const origin = row.querySelector(".segment-origin");
-      saveButton.addEventListener("click", async () => {
-        saveButton.disabled = true;
-        saveButton.textContent = "Saving…";
-        try {
-          await updateTranscriptSegment(inboxId, row.dataset.segmentId, textarea.value);
-          saveButton.textContent = "Saved";
-          origin.textContent = "Reviewed";
-          window.setTimeout(() => {
-            saveButton.textContent = "Save correction";
-            saveButton.disabled = false;
-          }, 900);
-        } catch (error) {
-          window.alert(error.message);
-          saveButton.textContent = "Save correction";
-          saveButton.disabled = false;
-        }
+    content.innerHTML = `
+      <div class="transcript-editor-list">${segmentRows}</div>
+      <div class="transcript-review-footer">
+        <span class="muted-copy" data-transcript-update-status>Review any sentence, then save all changes once.</span>
+        <button class="primary-action" type="button" data-transcript-update>Update transcript</button>
+      </div>
+    `;
+
+    const updateButton = content.querySelector("[data-transcript-update]");
+    const updateStatus = content.querySelector("[data-transcript-update-status]");
+    updateButton?.addEventListener("click", async () => {
+      const changedRows = [...content.querySelectorAll(".transcript-segment")].filter((row) => {
+        const value = row.querySelector("textarea")?.value || "";
+        return value.trim() !== String(originalText.get(row.dataset.segmentId) || "").trim();
       });
-    }
+
+      if (!changedRows.length) {
+        updateStatus.textContent = "No transcript changes to save.";
+        return;
+      }
+
+      updateButton.disabled = true;
+      updateButton.textContent = "Updating…";
+      updateStatus.textContent = `Saving ${changedRows.length} changed sentence(s)…`;
+      try {
+        await Promise.all(changedRows.map((row) => {
+          const value = row.querySelector("textarea")?.value || "";
+          return updateTranscriptSegment(inboxId, row.dataset.segmentId, value);
+        }));
+        changedRows.forEach((row) => {
+          const value = row.querySelector("textarea")?.value || "";
+          originalText.set(row.dataset.segmentId, value);
+          row.querySelector(".segment-origin").textContent = "Reviewed";
+        });
+        updateStatus.textContent = `${changedRows.length} sentence(s) updated.`;
+      } catch (error) {
+        updateStatus.textContent = error.message;
+      } finally {
+        updateButton.disabled = false;
+        updateButton.textContent = "Update transcript";
+      }
+    });
   } catch {
     content.innerHTML = "<p class=\"muted-copy\">Transcript not found. Generate a lesson first.</p>";
   }
@@ -365,7 +542,7 @@ function lessonInfoMarkup(item) {
             </div>
             <div class="lesson-info-top-actions">
               ${item.sourceUrl ? `<a class="source-link" href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noreferrer">Open source</a>` : ""}
-              <button class="secondary-action metadata-action" type="button" data-info-metadata>Update title</button>
+              <button class="secondary-action metadata-action" type="button" data-info-metadata>Update lesson</button>
               <button class="secondary-action regenerate-action" type="button" data-info-regenerate>Regenerate lesson</button>
               <button
                 class="lesson-card-preview"
@@ -386,6 +563,7 @@ function lessonInfoMarkup(item) {
             </div>
             <div class="lesson-card-title-wrap lesson-info-title-wrap">
               <h2>${escapeHtml(item.title)}</h2>
+              ${lessonTagEditorMarkup(item.tags || [])}
             </div>
           </div>
           <p>${escapeHtml(item.summaryVi || "A small moment ready for listening practice.")}</p>
@@ -405,12 +583,103 @@ function lessonInfoMarkup(item) {
   `;
 }
 
+function updateLessonTagsInLibraryCard(lessonId, tags) {
+  const titleWrap = libraryLessons?.querySelector(`[data-lesson-id="${CSS.escape(lessonId)}"] .lesson-card-title-wrap`);
+  if (!titleWrap) return;
+  const oldRow = titleWrap.querySelector(".lesson-tag-row");
+  const nextMarkup = tagChipsMarkup(tags);
+  if (oldRow) oldRow.remove();
+  if (nextMarkup) titleWrap.insertAdjacentHTML("beforeend", nextMarkup);
+}
+
+async function persistLessonInfoTags(lessonId, item, tagNames) {
+  const result = await updateLessonTags(lessonId, tagNames);
+  item.tags = result.tags || [];
+  libraryLessonMap.set(lessonId, item);
+  updateLessonTagsInLibraryCard(lessonId, item.tags);
+  availableTags = await listTags();
+  renderLibraryTags(availableTags);
+  renderJournalTagOptions(availableTags);
+  const editor = lessonInfoRoot.querySelector("[data-lesson-tag-editor]");
+  if (editor) {
+    editor.outerHTML = lessonTagEditorMarkup(item.tags);
+    bindLessonInfoTagEditor(lessonId, item);
+  }
+  return item.tags;
+}
+
+function bindLessonInfoTagEditor(lessonId, item) {
+  const editor = lessonInfoRoot.querySelector("[data-lesson-tag-editor]");
+  if (!editor) return;
+  const form = editor.querySelector("[data-lesson-tag-form]");
+  const input = form?.elements.tagName;
+  const error = editor.querySelector("[data-lesson-tag-error]");
+
+  const setError = (message = "") => {
+    if (!error) return;
+    error.textContent = message;
+    error.hidden = !message;
+  };
+
+  editor.querySelector("[data-add-lesson-tag]")?.addEventListener("click", () => {
+    setError("");
+    if (!form) return;
+    form.hidden = !form.hidden;
+    if (!form.hidden) input?.focus();
+  });
+
+  for (const button of editor.querySelectorAll("[data-remove-lesson-tag]")) {
+    button.addEventListener("click", async () => {
+      const tagName = button.dataset.removeLessonTag || "";
+      const nextTags = (item.tags || [])
+        .map((tag) => tag.name)
+        .filter((name) => tagNameKey(name) !== tagNameKey(tagName));
+      button.disabled = true;
+      setError("");
+      try {
+        await persistLessonInfoTags(lessonId, item, nextTags);
+      } catch (errorMessage) {
+        button.disabled = false;
+        setError(errorMessage.message);
+      }
+    });
+  }
+
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const name = String(input?.value || "").trim();
+    if (!name) {
+      setError("Enter a topic tag.");
+      return;
+    }
+    const existingNames = (item.tags || []).map((tag) => tag.name);
+    if (existingNames.some((existing) => tagNameKey(existing) === tagNameKey(name))) {
+      setError("This lesson already has that tag.");
+      input?.select();
+      return;
+    }
+    const submit = form.querySelector("button[type='submit']");
+    submit.disabled = true;
+    setError("");
+    try {
+      await persistLessonInfoTags(lessonId, item, [...existingNames, name]);
+    } catch (errorMessage) {
+      submit.disabled = false;
+      setError(errorMessage.message);
+    }
+  });
+}
+
 async function openLessonInfo(lessonId) {
   const item = libraryLessonMap.get(lessonId);
   if (!item || !lessonInfoDialog || !lessonInfoRoot) return;
 
+  if (!availableTags.length) {
+    availableTags = await listTags();
+  }
   lessonInfoRoot.innerHTML = lessonInfoMarkup(item);
   if (!lessonInfoDialog.open) lessonInfoDialog.showModal();
+  bindLessonInfoTagEditor(lessonId, item);
 
   lessonInfoRoot.querySelector("[data-info-preview]")?.addEventListener("click", () => {
     void openLesson(lessonId, "library");
@@ -556,18 +825,24 @@ function buildMetadataPrompt(lessonDetail) {
   const title = lessonDetail.lesson?.title || "";
   const summary = lessonDetail.learning?.summaryVi || "";
   const script = transcriptText(lessonDetail);
+  const currentTags = (lessonDetail.tags || []).map((tag) => tag.name);
+  const existingTags = availableTags.map((tag) => tag.name);
 
   return `You are helping update metadata for a personal English listening lesson.
 
 Goal:
 - Create a concise, specific title.
 - Create a useful description/content summary for the learner.
+- Select 1-4 concise content tags.
+- Reuse an existing tag when it fits; create a new tag only when none is suitable.
 - Base the result only on the transcript.
 - Avoid generic titles such as "Facebook", "Facebook Reel", "Personal learning", or "Lesson".
 
 Current metadata:
 Title: ${title}
 Description: ${summary}
+Current tags: ${currentTags.join(", ") || "(none)"}
+Existing tag library: ${existingTags.join(", ") || "(none yet)"}
 
 Transcript:
 ${script || "(No transcript available)"}
@@ -575,12 +850,14 @@ ${script || "(No transcript available)"}
 Return ONLY valid JSON with this exact structure:
 {
   "title": "A specific lesson title, max 90 characters",
-  "content": "A learner-facing description in Vietnamese, 1-3 sentences, max 500 characters"
+  "content": "A learner-facing description in Vietnamese, 1-3 sentences, max 500 characters",
+  "tags": ["1 to 4 concise tags"]
 }
 
 Rules:
 - Do not include markdown fences.
-- Do not add extra keys.
+- Return exactly title, content, and tags.
+- Tags should describe the subject or learning context, not generic words such as video or lesson.
 - Use natural Vietnamese for "content".
 - The title may be English if the key phrase is English; otherwise use Vietnamese.`;
 }
@@ -668,7 +945,14 @@ async function openMetadataDialog(lessonId) {
   metadataDialog.showModal();
 
   try {
-    metadataEditingLesson = await getLessonDetail(lessonId);
+    const [lessonDetail, tags] = await Promise.all([getLessonDetail(lessonId), listTags()]);
+    metadataEditingLesson = lessonDetail;
+    availableTags = tags;
+    if (metadataExistingTags) {
+      metadataExistingTags.innerHTML = tags.length
+        ? tags.map((tag) => `<span class="lesson-tag">#${escapeHtml(tag.name)}</span>`).join("")
+        : '<span class="muted-copy">No tags yet. The first useful tags will be created here.</span>';
+    }
   } catch (error) {
     metadataError.hidden = false;
     metadataError.textContent = error.message;
@@ -680,21 +964,23 @@ async function refreshJournal() {
   journalEntries.innerHTML = '<div class="empty-card"><p>Loading journal…</p></div>';
   if (journalPhrases) journalPhrases.innerHTML = "";
   if (journalHero) journalHero.hidden = true;
-  if (journalRecent) journalRecent.hidden = true;
   if (journalPhraseOfDay) journalPhraseOfDay.hidden = true;
 
   try {
     const q = journalSearch?.value || "";
-    const [overview, entries] = await Promise.all([
+    const [overview, entries, tags] = await Promise.all([
       getJournalOverview("month"),
-      listJournalEntries(q)
+      listJournalEntries(q),
+      listTags()
     ]);
 
     journalOverviewCache = overview;
+    journalEntryCache = entries;
+    availableTags = tags;
+    renderJournalTagOptions(tags);
     renderJournalHero(overview);
-    renderJournalRecent(overview);
     renderJournalPhraseOfDay(overview);
-    renderJournalEntries(entries);
+    renderJournalEntries(filteredJournalEntries());
     renderMostViewedLessons(overview);
   } catch (error) {
     journalEntries.innerHTML = `
@@ -704,6 +990,32 @@ async function refreshJournal() {
       </div>
     `;
   }
+}
+
+function filteredJournalEntries() {
+  return journalEntryCache.filter((entry) => {
+    if (currentJournalFavorite && !entry.isFavorite) return false;
+    if (!currentJournalFavorite && currentJournalStatus && readingStatus(entry) !== currentJournalStatus) {
+      return false;
+    }
+    if (currentJournalTag && !(entry.tags || []).some((tag) => tag.slug === currentJournalTag)) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function renderJournalTagOptions(tags) {
+  if (!journalTagFilter) return;
+  if (currentJournalTag && !tags.some((tag) => tag.slug === currentJournalTag)) {
+    currentJournalTag = "";
+    updateUiSettings({ journal: { tag: "" } });
+  }
+  journalTagFilter.innerHTML = `
+    <option value="">All tags</option>
+    ${tags.map((tag) => `<option value="${escapeHtml(tag.slug)}">${escapeHtml(tag.name)} (${tag.lessonCount})</option>`).join("")}
+  `;
+  journalTagFilter.value = currentJournalTag;
 }
 
 function renderJournalHero(overview) {
@@ -719,53 +1031,23 @@ function renderJournalHero(overview) {
     : '<div class="lesson-card-poster-placeholder">EJ</div>';
 
   journalHero.innerHTML = `
+    <p class="eyebrow">Continue learning</p>
     <button class="journal-hero-open" type="button" data-lesson-id="${escapeHtml(lesson.id)}">
       <div class="journal-hero-media">${posterUrl}</div>
       <div class="journal-hero-body">
+        <span class="journal-continue-status">${escapeHtml(readingStatusLabel(readingStatus(lesson)))}</span>
         <h2>${escapeHtml(lesson.title)}</h2>
         <div class="journal-hero-meta">
-          <span>${escapeHtml(readingStatusLabel(readingStatus(lesson)))}</span>
           <span>${lesson.viewCount || 0} views</span>
           <span>${escapeHtml(durationLabel(lesson.durationMs))}</span>
         </div>
-        <span class="primary-action journal-hero-play">▶ Play</span>
+        <span class="source-link journal-hero-play">Resume lesson →</span>
       </div>
     </button>
   `;
   journalHero.querySelector("[data-lesson-id]")?.addEventListener("click", () => {
     void openLesson(lesson.id, "journal");
   });
-}
-
-function renderJournalRecent(overview) {
-  if (!journalRecent || !journalRecentList) return;
-  const lessons = (overview.recentLessons || []).slice(0, 8);
-  if (!lessons.length) {
-    journalRecent.hidden = true;
-    return;
-  }
-  journalRecent.hidden = false;
-  journalRecentList.innerHTML = lessons.map((lesson) => {
-    const status = readingStatus(lesson);
-    const poster = lesson.hasPoster
-      ? `<img src="${escapeHtml(lesson.mediaUrls?.poster || '')}" alt="" loading="lazy" />`
-      : '<div class="journal-recent-poster-placeholder">EJ</div>';
-    return `
-      <button class="journal-recent-card" type="button" data-lesson-id="${escapeHtml(lesson.id)}">
-        <div class="journal-recent-media">${poster}</div>
-        <div class="journal-recent-body">
-          <strong>${escapeHtml(lesson.title)}</strong>
-          <small>${escapeHtml(readingStatusLabel(status))} · ${lesson.viewCount || 0} views</small>
-        </div>
-      </button>
-    `;
-  }).join("");
-
-  for (const card of journalRecentList.querySelectorAll("[data-lesson-id]")) {
-    card.addEventListener("click", () => {
-      void openLesson(card.dataset.lessonId, "journal");
-    });
-  }
 }
 
 function renderJournalPhraseOfDay(overview) {
@@ -786,12 +1068,18 @@ function renderJournalPhraseOfDay(overview) {
 
 function renderJournalEntries(entries) {
   if (!journalEntries) return;
+  if (journalResultCount) {
+    const suffix = entries.length === 1 ? "note" : "notes";
+    journalResultCount.textContent = `${entries.length} ${suffix} shown`;
+  }
   if (!entries.length) {
+    const hasQuery = Boolean(journalSearch?.value.trim());
+    const hasFilter = Boolean(currentJournalStatus || currentJournalFavorite || currentJournalTag);
     journalEntries.innerHTML = `
       <div class="empty-card">
         <span class="empty-icon">◎</span>
-        <h3>No journal entries yet</h3>
-        <p>Open a lesson and fill in the Journal tab to see your thoughts here.</p>
+        <h3>${hasQuery || hasFilter ? "No matching notes" : "No journal entries yet"}</h3>
+        <p>${hasQuery || hasFilter ? "Try another search, tag, or learning status." : "Open a lesson and fill in the Journal tab to see your thoughts here."}</p>
       </div>
     `;
     return;
@@ -806,10 +1094,20 @@ function renderJournalEntries(entries) {
         inboxItemId: entry.inboxItemId,
         lessonTitle: entry.lessonTitle,
         lessonSummaryVi: entry.lessonSummaryVi,
+        media: entry.media || {},
+        tags: entry.tags || [],
+        learningStatus: entry.learningStatus,
+        viewCount: entry.viewCount,
+        isFavorite: entry.isFavorite,
+        updatedAt: entry.updatedAt,
         entries: []
       });
     }
-    grouped.get(key).entries.push(entry);
+    const group = grouped.get(key);
+    group.entries.push(entry);
+    if (String(entry.updatedAt || "") > String(group.updatedAt || "")) {
+      group.updatedAt = entry.updatedAt;
+    }
   }
 
   const fieldLabels = {
@@ -820,6 +1118,13 @@ function renderJournalEntries(entries) {
   };
 
   journalEntries.innerHTML = [...grouped.values()].map((group) => {
+    const posterUrl = group.media?.posterUrl || "";
+    const backgroundStyle = posterUrl
+      ? ` style="--journal-poster-bg: url('${escapeHtml(posterUrl)}')"`
+      : "";
+    const poster = group.media?.posterUrl
+      ? `<img src="${escapeHtml(group.media.posterUrl)}" alt="" loading="lazy" />`
+      : '<div class="lesson-card-poster-placeholder">EJ</div>';
     const entryCards = group.entries.map((entry) => `
       <div class="journal-entry-card">
         <span class="journal-entry-type">${escapeHtml(fieldLabels[entry.entryType] || entry.entryType)}</span>
@@ -828,13 +1133,15 @@ function renderJournalEntries(entries) {
     `).join("");
 
     return `
-      <article class="journal-lesson-group">
+      <article class="journal-lesson-group"${backgroundStyle}>
         <button class="journal-lesson-header" type="button" data-lesson-id="${escapeHtml(group.lessonId)}">
+          <div class="journal-lesson-poster">${poster}</div>
           <div>
             <h3>${escapeHtml(group.lessonTitle)}</h3>
-            ${group.lessonSummaryVi ? `<p>${escapeHtml(group.lessonSummaryVi)}</p>` : ""}
+            <p>${escapeHtml(readingStatusLabel(readingStatus(group)))} · Updated ${escapeHtml(formatJournalDate(group.updatedAt))}</p>
+            ${tagChipsMarkup(group.tags, { limit: 4 })}
           </div>
-          <span class="journal-entry-count">${group.entries.length} note(s)</span>
+          <span class="journal-entry-count">Open lesson →</span>
         </button>
         <div class="journal-entry-list">${entryCards}</div>
       </article>
@@ -852,7 +1159,7 @@ function renderMostViewedLessons(overview) {
   if (!journalPhrases) return;
   const lessons = overview.mostViewedLessons || [];
   if (lessons.length) {
-    journalPhrases.innerHTML = lessons.slice(0, 10).map((lesson) => `
+    journalPhrases.innerHTML = lessons.slice(0, 5).map((lesson, index) => `
       <button
         class="journal-phrase-chip"
         type="button"
@@ -864,8 +1171,11 @@ function renderMostViewedLessons(overview) {
         data-preview-reading-status="${escapeHtml(readingStatus(lesson))}"
         data-preview-poster="${escapeHtml(lesson.mediaUrls?.poster || "")}"
       >
-        ${escapeHtml(lesson.title)}
-        <small>${lesson.viewCount || 0} views · ${escapeHtml(readingStatusLabel(readingStatus(lesson)))}</small>
+        <span class="journal-phrase-rank">${index + 1}</span>
+        <span class="journal-phrase-text">
+          ${escapeHtml(lesson.title)}
+          <small>${lesson.viewCount || 0} views · ${escapeHtml(readingStatusLabel(readingStatus(lesson)))}</small>
+        </span>
       </button>
     `).join("");
 
@@ -882,19 +1192,58 @@ function renderMostViewedLessons(overview) {
   }
 }
 
+function renderLibraryTags(tags) {
+  if (!libraryTagList) return;
+  availableTags = tags;
+  if (currentLibraryTag && !tags.some((tag) => tag.slug === currentLibraryTag)) {
+    currentLibraryTag = "";
+    updateUiSettings({ library: { tag: "" } });
+  }
+  libraryTagList.classList.toggle("is-expanded", libraryTagsExpanded);
+  libraryTagList.innerHTML = `
+    <button class="library-tag${currentLibraryTag ? "" : " is-active"}" type="button" data-library-tag="">All topics</button>
+    ${tags.map((tag) => `
+      <button class="library-tag${currentLibraryTag === tag.slug ? " is-active" : ""}" type="button" data-library-tag="${escapeHtml(tag.slug)}">
+        <span>#${escapeHtml(tag.name)}</span><small>${tag.lessonCount}</small>
+      </button>
+    `).join("")}
+  `;
+
+  for (const button of libraryTagList.querySelectorAll("[data-library-tag]")) {
+    button.addEventListener("click", async () => {
+      currentLibraryTag = button.dataset.libraryTag || "";
+      updateUiSettings({ library: { tag: currentLibraryTag } });
+      await refreshLibrary();
+    });
+  }
+
+  window.requestAnimationFrame(() => {
+    if (!libraryTagsMore) return;
+    const overflows = libraryTagList.scrollHeight > libraryTagList.clientHeight + 2;
+    libraryTagsMore.hidden = !libraryTagsExpanded && !overflows;
+    if (libraryTagsExpanded && tags.length > 5) libraryTagsMore.hidden = false;
+    libraryTagsMore.textContent = libraryTagsExpanded ? "Show less" : "See more";
+  });
+}
+
 async function refreshLibrary() {
   if (!libraryLessons) return;
   libraryLessons.innerHTML = '<div class="empty-card"><p>Searching your library…</p></div>';
 
   try {
-    const lessons = await listLessons({
-      q: librarySearch?.value || "",
-      status: currentLibraryStatus,
-      favorite: currentLibraryFavorite,
-      limit: 200
-    });
+    const [lessons, tags] = await Promise.all([
+      listLessons({
+        q: librarySearch?.value || "",
+        status: currentLibraryStatus,
+        favorite: currentLibraryFavorite,
+        tag: currentLibraryTag,
+        limit: 200
+      }),
+      listTags()
+    ]);
 
     libraryLessonMap = new Map(lessons.map((lesson) => [lesson.id, lesson]));
+    renderLibraryTags(tags);
 
     if (!lessons.length) {
       libraryLessons.innerHTML = `
@@ -920,7 +1269,7 @@ async function refreshLibrary() {
 }
 
 for (const link of navLinks) {
-  link.addEventListener("click", () => showPage(link.dataset.page));
+  link.addEventListener("click", () => void showPage(link.dataset.page));
 }
 
 for (const button of document.querySelectorAll("[data-open-capture]")) {
@@ -946,6 +1295,12 @@ for (const filter of libraryStatusFilters) {
       item.classList.remove("is-active");
       item.textContent = "♡";
     });
+    updateUiSettings({
+      library: {
+        status: currentLibraryStatus,
+        favorite: currentLibraryFavorite
+      }
+    });
     await refreshLibrary();
   });
 }
@@ -959,23 +1314,73 @@ for (const filter of libraryFavoriteFilters) {
       item.classList.toggle("is-active", item === filter);
       item.textContent = item === filter ? "♥" : "♡";
     });
+    updateUiSettings({
+      library: {
+        status: currentLibraryStatus,
+        favorite: currentLibraryFavorite
+      }
+    });
     await refreshLibrary();
   });
 }
 
 librarySearch?.addEventListener("input", () => {
+  updateUiSettings({ library: { search: librarySearch.value } });
   if (librarySearchTimer) window.clearTimeout(librarySearchTimer);
   librarySearchTimer = window.setTimeout(() => {
     void refreshLibrary();
   }, 250);
 });
 
+libraryTagsMore?.addEventListener("click", () => {
+  libraryTagsExpanded = !libraryTagsExpanded;
+  updateUiSettings({ library: { tagsExpanded: libraryTagsExpanded } });
+  renderLibraryTags(availableTags);
+});
+
 let journalSearchTimer = null;
 journalSearch?.addEventListener("input", () => {
+  updateUiSettings({ journal: { search: journalSearch.value } });
   if (journalSearchTimer) window.clearTimeout(journalSearchTimer);
   journalSearchTimer = window.setTimeout(() => {
     void refreshJournal();
   }, 300);
+});
+
+for (const filter of journalStatusFilters) {
+  filter.addEventListener("click", () => {
+    currentJournalStatus = filter.dataset.journalStatus || "";
+    currentJournalFavorite = false;
+    syncJournalFilters();
+    updateUiSettings({
+      journal: {
+        status: currentJournalStatus,
+        favorite: false
+      }
+    });
+    renderJournalEntries(filteredJournalEntries());
+  });
+}
+
+for (const filter of journalFavoriteFilters) {
+  filter.addEventListener("click", () => {
+    currentJournalFavorite = !currentJournalFavorite;
+    if (currentJournalFavorite) currentJournalStatus = "";
+    syncJournalFilters();
+    updateUiSettings({
+      journal: {
+        status: currentJournalStatus,
+        favorite: currentJournalFavorite
+      }
+    });
+    renderJournalEntries(filteredJournalEntries());
+  });
+}
+
+journalTagFilter?.addEventListener("change", () => {
+  currentJournalTag = journalTagFilter.value;
+  updateUiSettings({ journal: { tag: currentJournalTag } });
+  renderJournalEntries(filteredJournalEntries());
 });
 
 journalSurprise?.addEventListener("click", async () => {
@@ -1530,14 +1935,18 @@ metadataForm?.addEventListener("submit", async (event) => {
     const parsed = parseMetadataResponse(metadataForm.elements.metadataResponse.value);
     const title = String(parsed.title || "").trim();
     const content = String(parsed.content || "").trim();
-    if (!title || !content) {
-      throw new Error('Paste JSON with both "title" and "content".');
+    const tags = Array.isArray(parsed.tags)
+      ? parsed.tags.map((tag) => String(tag || "").trim()).filter(Boolean).slice(0, 6)
+      : [];
+    if (!title || !content || !tags.length) {
+      throw new Error('Paste JSON with "title", "content", and at least one tag.');
     }
 
     await updateLessonMetadata(metadataEditingLesson.lesson.id, {
       title,
       summaryVi: content,
-      sourceTitle: title
+      sourceTitle: title,
+      tags
     });
     metadataDialog?.close();
     metadataEditingLesson = null;
@@ -1551,6 +1960,20 @@ metadataForm?.addEventListener("submit", async (event) => {
   }
 });
 
-const initialPage = new URLSearchParams(window.location.search).get("page");
-const supportedInitialPages = new Set(["journal", "library", "share"]);
-showPage(supportedInitialPages.has(initialPage) ? initialPage : "journal", { updateUrl: false });
+let scrollSaveTimer = null;
+window.addEventListener("scroll", () => {
+  if (scrollSaveTimer) window.clearTimeout(scrollSaveTimer);
+  scrollSaveTimer = window.setTimeout(saveCurrentScroll, 160);
+}, { passive: true });
+window.addEventListener("beforeunload", saveCurrentScroll);
+
+const requestedPage = new URLSearchParams(window.location.search).get("page");
+const initialPage = supportedPages.has(requestedPage) ? requestedPage : currentPage;
+await showPage(initialPage, { updateUrl: false });
+
+const savedLesson = getUiSettings().lesson;
+if (savedLesson?.id && (!requestedPage || savedLesson.returnPage === initialPage)) {
+  await openLesson(savedLesson.id, savedLesson.returnPage || initialPage, savedLesson.player || {});
+} else if (requestedPage && savedLesson) {
+  updateUiSettings({ lesson: null });
+}

@@ -6,6 +6,7 @@ import { spawn } from "node:child_process";
 
 import { config, toRelativeDataPath, toAbsoluteDataPath } from "../config.js";
 import { getDatabase } from "../db/database.js";
+import { listLessonTags, normalizeTagNames, replaceLessonTags } from "./tag.service.js";
 
 function nowIso() {
   return new Date().toISOString();
@@ -269,6 +270,10 @@ function persistLesson({ inboxItemId, transcriptId, lessonId, outputPath, jobId 
         WHERE lesson_id = ?
       `).get(previousLesson.id)
     : null;
+  const previousTags = previousLesson ? listLessonTags(previousLesson.id, db) : [];
+  const initialTags = previousTags.length
+    ? previousTags.map((tagItem) => tagItem.name)
+    : normalizeTagNames(learning.tags || [lesson.topic].filter(Boolean));
 
   const journalByType = new Map(previousJournal.map((entry) => [entry.entryType, entry.content]));
   const artifactJournal = payload.journal || {};
@@ -345,6 +350,8 @@ function persistLesson({ inboxItemId, transcriptId, lessonId, outputPath, jobId 
       initialProgress.lastCompletedAt
     );
 
+    replaceLessonTags(lessonId, initialTags, db, timestamp);
+
     db.prepare(`
       UPDATE lesson_generation_jobs
       SET status = 'COMPLETED', stage = 'COMPLETE', progress = 100,
@@ -368,6 +375,10 @@ function persistLesson({ inboxItemId, transcriptId, lessonId, outputPath, jobId 
     myExample: initialJournal.MY_EXAMPLE
   };
   payload.progress = initialProgress;
+  payload.learning = {
+    ...(payload.learning || {}),
+    tags: initialTags
+  };
   fs.writeFileSync(outputPath, JSON.stringify(payload, null, 2), "utf-8");
 }
 

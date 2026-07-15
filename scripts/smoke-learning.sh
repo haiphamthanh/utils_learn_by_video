@@ -30,6 +30,8 @@ tables = {
 }
 for required in {
     "lessons",
+    "tags",
+    "lesson_tags",
     "journal_entries",
     "lesson_notes",
     "learning_progress",
@@ -69,6 +71,14 @@ connection.execute(
     "INSERT INTO learning_progress (lesson_id, learning_status, listen_count, shadow_count) VALUES (?, ?, ?, ?)",
     ("lesson_1", "LEARNING", 2, 1),
 )
+connection.execute(
+    "INSERT INTO tags (id, name, slug, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+    ("tag_1", "Mindset", "mindset", "2026-07-05", "2026-07-05"),
+)
+connection.execute(
+    "INSERT INTO lesson_tags (lesson_id, tag_id, created_at) VALUES (?, ?, ?)",
+    ("lesson_1", "tag_1", "2026-07-05"),
+)
 connection.commit()
 
 journal = connection.execute(
@@ -80,9 +90,13 @@ note = connection.execute(
 progress = connection.execute(
     "SELECT learning_status, listen_count, shadow_count FROM learning_progress WHERE lesson_id='lesson_1'"
 ).fetchone()
+tag = connection.execute(
+    "SELECT t.name FROM tags t JOIN lesson_tags lt ON lt.tag_id=t.id WHERE lt.lesson_id='lesson_1'"
+).fetchone()[0]
 assert journal == "A useful idea"
 assert note == ("2026-07-05", "A quick listening note", 0)
 assert progress == ("LEARNING", 2, 1)
+assert tag == "Mindset"
 
 player_source = Path("public/js/lesson-player.js").read_text(encoding="utf-8")
 for required in [
@@ -139,7 +153,7 @@ legacy_tables = {
     row[0]
     for row in legacy.execute("SELECT name FROM sqlite_master WHERE type='table'")
 }
-assert {"journal_entries", "lesson_notes", "learning_progress"} <= legacy_tables
+assert {"journal_entries", "lesson_notes", "learning_progress", "tags", "lesson_tags"} <= legacy_tables
 
 print("Learning player and v0.4.0 migration smoke test passed.")
 PY

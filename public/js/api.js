@@ -65,14 +65,19 @@ export function getLesson(inboxId) {
   return request(`/api/inbox/${inboxId}/lesson`);
 }
 
-export function listLessons({ q = "", status = "", favorite = false, limit = 100 } = {}) {
+export function listLessons({ q = "", status = "", favorite = false, tag = "", limit = 100 } = {}) {
   const params = new URLSearchParams();
   if (q) params.set("q", q);
   if (status) params.set("status", status);
   if (favorite) params.set("favorite", "1");
+  if (tag) params.set("tag", tag);
   if (limit) params.set("limit", String(limit));
   const query = params.toString();
   return request(`/api/lessons${query ? `?${query}` : ""}`);
+}
+
+export function listTags() {
+  return request("/api/lessons/tags");
 }
 
 export function getLessonDetail(lessonId) {
@@ -119,6 +124,14 @@ export function updateLessonMetadata(lessonId, payload) {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
+  });
+}
+
+export function updateLessonTags(lessonId, tags) {
+  return request(`/api/lessons/${lessonId}/tags`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tags })
   });
 }
 

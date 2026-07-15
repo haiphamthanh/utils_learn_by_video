@@ -19,84 +19,120 @@
       </a>
 
       <nav class="nav" aria-label="Primary">
-        <button class="nav-link is-active" data-page="journal">Journal</button>
-        <button class="nav-link" data-page="library">Library</button>
-        <button class="nav-link" data-page="share">Share</button>
+        <button class="nav-link is-active" data-page="journal">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="12" y1="8" x2="16" y2="8"/><line x1="12" y1="12" x2="16" y2="12"/></svg>
+          <span>Journal</span>
+        </button>
+        <button class="nav-link" data-page="library">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="8" rx="1"/><rect x="14" y="3" width="7" height="8" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          <span>Library</span>
+        </button>
+        <button class="nav-link" data-page="share">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="2.5"/><circle cx="18" cy="19" r="2.5"/><line x1="15.6" y1="6.5" x2="9" y2="11"/><line x1="9" y1="13" x2="15.6" y2="17.5"/></svg>
+          <span>Share</span>
+        </button>
       </nav>
     </header>
 
-    <main class="page-shell">
+    <main class="app-pages">
       <section id="journal-page" class="page">
-        <div class="section-heading personal-learning-heading">
+        <div class="section-heading journal-page-heading">
           <h1>Journal</h1>
-          <div class="journal-toolbar">
-            <p class="heading-copy">Review lessons, saved phrases, and the ideas worth returning to.</p>
-            <div class="journal-heading-actions">
-              <button class="lesson-icon-action journal-stats-action" type="button" id="journal-stats-btn" aria-label="Open stats" title="Stats">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M4 19V5"></path>
-                  <path d="M4 19h16"></path>
-                  <rect class="stats-bar-red" x="7" y="10" width="4" height="7" rx="1"></rect>
-                  <rect class="stats-bar-violet" x="12.5" y="5" width="4" height="12" rx="1"></rect>
-                  <rect class="stats-bar-amber" x="18" y="8" width="4" height="9" rx="1"></rect>
-                </svg>
-              </button>
-              <button class="primary-action" type="button" id="journal-surprise">Surprise me</button>
-            </div>
+          <div class="journal-heading-copy">
+            <p class="eyebrow">Personal reflection</p>
+            <p class="heading-copy">Find the thoughts, phrases, and examples you chose to keep.</p>
+          </div>
+          <div class="journal-heading-actions">
+            <button class="lesson-icon-action journal-stats-action" type="button" id="journal-stats-btn" aria-label="Open stats" title="Stats">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 19V5"></path>
+                <path d="M4 19h16"></path>
+                <rect class="stats-bar-red" x="7" y="10" width="4" height="7" rx="1"></rect>
+                <rect class="stats-bar-violet" x="12.5" y="5" width="4" height="12" rx="1"></rect>
+                <rect class="stats-bar-amber" x="18" y="8" width="4" height="9" rx="1"></rect>
+              </svg>
+            </button>
+            <button class="secondary-action" type="button" id="journal-surprise">Surprise me</button>
           </div>
         </div>
 
-        <div id="journal-hero" class="journal-hero" hidden></div>
-
-        <div class="journal-carousel-row" id="journal-recent" hidden>
-          <p class="eyebrow">Continue learning</p>
-          <div class="journal-carousel" id="journal-recent-list"></div>
-        </div>
-
-        <div class="journal-layout">
-          <section class="journal-main">
-            <div class="journal-section-heading">
-              <p class="eyebrow">All your notes</p>
-              <label class="library-search">
-                <span class="sr-only">Search journal</span>
-                <input id="journal-search" type="search" placeholder="Search phrases, thoughts, examples…" />
-              </label>
+        <div class="journal-book">
+          <aside class="journal-book-page journal-book-left">
+            <div class="journal-chapter-heading">
+              <span>Your learning journey</span>
+              <strong id="journal-chapter-label">Moments worth keeping</strong>
             </div>
-            <div id="journal-entries" aria-live="polite"></div>
-          </section>
-
-          <aside class="journal-sidebar">
+            <div id="journal-hero" class="journal-hero" hidden></div>
             <div class="journal-sidebar-card" id="journal-phrase-of-day" hidden>
               <p class="eyebrow">Phrase of the day</p>
               <blockquote id="journal-phrase-of-day-text"></blockquote>
               <a id="journal-phrase-of-day-link" class="source-link" href="#">Open lesson</a>
             </div>
-            <div class="journal-sidebar-card">
-              <p class="eyebrow">Most favorite lessons</p>
+            <div class="journal-sidebar-card journal-revisited">
+              <p class="eyebrow">Frequently revisited</p>
               <div id="journal-phrases"></div>
             </div>
           </aside>
+
+          <section class="journal-book-page journal-book-right journal-main">
+            <div class="journal-notes-heading">
+              <div>
+                <p class="eyebrow">Journey entries</p>
+                <h2>What stayed with you</h2>
+                <p id="journal-result-count" class="muted-copy"></p>
+              </div>
+            </div>
+            <div class="journal-filter-bar">
+              <label class="journal-search">
+                <span class="sr-only">Search journal</span>
+                <input id="journal-search" type="search" placeholder="Search your notes…" />
+              </label>
+              <div class="journal-status-filters" role="group" aria-label="Filter by learning status">
+                <button class="filter-chip is-active" type="button" data-journal-status="">All</button>
+                <button class="filter-chip" type="button" data-journal-status="NEW">New</button>
+                <button class="filter-chip" type="button" data-journal-status="LEARNING">Reading</button>
+                <button class="filter-chip" type="button" data-journal-status="MASTERED">Read</button>
+                <button class="filter-chip journal-favorite-filter" type="button" data-journal-favorite="true">Favorite</button>
+              </div>
+              <label class="journal-tag-select">
+                <span class="sr-only">Filter by tag</span>
+                <select id="journal-tag-filter" aria-label="Filter journal by tag">
+                  <option value="">All tags</option>
+                </select>
+              </label>
+            </div>
+            <div id="journal-entries" aria-live="polite"></div>
+          </section>
         </div>
       </section>
 
       <section id="library-page" class="page" hidden>
         <div class="section-heading library-heading">
           <h1>Library</h1>
-          <div class="library-toolbar">
-            <label class="library-search">
-              <span class="sr-only">Search lessons</span>
-              <input id="library-search" type="search" placeholder="Search title, transcript, phrase or journal…" />
-            </label>
-            <div class="library-filter-chips">
-              <button class="filter-chip is-active" data-library-status="">All</button>
-              <button class="filter-chip" data-library-status="NEW">New</button>
-              <button class="filter-chip" data-library-status="LEARNING">Reading</button>
-              <button class="filter-chip" data-library-status="MASTERED">Read</button>
-              <button class="filter-chip favorite-filter-chip" data-library-favorite="true" aria-label="Favorite lessons">♡</button>
-            </div>
-            <button class="primary-action library-add-source" data-open-capture aria-label="Add source" title="Add source">
-              +
-            </button>
+          <div class="library-heading-copy">
+            <p class="eyebrow">Collected along the way</p>
+            <p class="heading-copy">Every video is a chapter waiting to be revisited.</p>
+          </div>
+          <button class="primary-action library-add-source" data-open-capture aria-label="Add source" title="Add source">+</button>
+        </div>
+        <section class="library-tags" aria-labelledby="library-tags-title">
+          <div class="library-tags-heading">
+            <p class="eyebrow" id="library-tags-title">Topics</p>
+            <button class="library-tags-more" type="button" id="library-tags-more" hidden>See more</button>
+          </div>
+          <div class="library-tag-list" id="library-tag-list" aria-live="polite"></div>
+        </section>
+        <div class="library-toolbar">
+          <label class="library-search">
+            <span class="sr-only">Search lessons</span>
+            <input id="library-search" type="search" placeholder="Search title, transcript, phrase or journal…" />
+          </label>
+          <div class="library-filter-chips">
+            <button class="filter-chip is-active" data-library-status="">All</button>
+            <button class="filter-chip" data-library-status="NEW">New</button>
+            <button class="filter-chip" data-library-status="LEARNING">Reading</button>
+            <button class="filter-chip" data-library-status="MASTERED">Read</button>
+            <button class="filter-chip favorite-filter-chip" data-library-favorite="true" aria-label="Favorite lessons">♡</button>
           </div>
         </div>
         <div id="library-lessons" class="lesson-card-grid" aria-live="polite"></div>
@@ -285,10 +321,12 @@
 
         <label>
           <span>AI response JSON</span>
+          <small class="metadata-tag-hint">The AI should reuse these tags when relevant, or suggest a concise new tag.</small>
+          <div id="metadata-existing-tags" class="metadata-existing-tags" aria-live="polite"></div>
           <textarea
             name="metadataResponse"
             rows="10"
-            placeholder='{"title":"...","content":"..."}'
+            placeholder='{"title":"...","content":"...","tags":["..."]}'
             required
           ></textarea>
         </label>

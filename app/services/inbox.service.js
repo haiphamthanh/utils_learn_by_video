@@ -237,6 +237,7 @@ export function attachMedia(inboxItemId, uploadedFile) {
       db.prepare("DELETE FROM journal_entries WHERE lesson_id = ?").run(lessonId);
       db.prepare("DELETE FROM lesson_notes WHERE lesson_id = ?").run(lessonId);
       db.prepare("DELETE FROM learning_progress WHERE lesson_id = ?").run(lessonId);
+      db.prepare("DELETE FROM lesson_tags WHERE lesson_id = ?").run(lessonId);
     }
 
     db.prepare("DELETE FROM lesson_generation_jobs WHERE inbox_item_id = ?").run(inboxItemId);
@@ -364,6 +365,7 @@ export function deleteInboxItem(inboxItemId) {
       db.prepare("DELETE FROM journal_entries WHERE lesson_id = ?").run(lessonId);
       db.prepare("DELETE FROM lesson_notes WHERE lesson_id = ?").run(lessonId);
       db.prepare("DELETE FROM learning_progress WHERE lesson_id = ?").run(lessonId);
+      db.prepare("DELETE FROM lesson_tags WHERE lesson_id = ?").run(lessonId);
     }
 
     db.prepare("DELETE FROM lesson_generation_jobs WHERE inbox_item_id = ?").run(inboxItemId);

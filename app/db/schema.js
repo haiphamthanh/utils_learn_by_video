@@ -173,6 +173,23 @@ CREATE TABLE IF NOT EXISTS lesson_notes (
   FOREIGN KEY(lesson_id) REFERENCES lessons(id)
 );
 
+CREATE TABLE IF NOT EXISTS tags (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS lesson_tags (
+  lesson_id TEXT NOT NULL,
+  tag_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (lesson_id, tag_id),
+  FOREIGN KEY(lesson_id) REFERENCES lessons(id),
+  FOREIGN KEY(tag_id) REFERENCES tags(id)
+);
+
 CREATE TABLE IF NOT EXISTS learning_progress (
   lesson_id TEXT PRIMARY KEY,
   learning_status TEXT NOT NULL DEFAULT 'NEW',
@@ -247,6 +264,9 @@ CREATE INDEX IF NOT EXISTS idx_lesson_notes_lesson
 
 CREATE INDEX IF NOT EXISTS idx_lesson_notes_content
   ON lesson_notes(content);
+
+CREATE INDEX IF NOT EXISTS idx_lesson_tags_tag
+  ON lesson_tags(tag_id, lesson_id);
 
 CREATE INDEX IF NOT EXISTS idx_learning_progress_status
   ON learning_progress(learning_status, last_opened_at);

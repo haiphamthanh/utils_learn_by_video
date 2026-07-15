@@ -7,11 +7,13 @@ import {
   getLessonDetail,
   getLessonMedia,
   listLessons,
+  listTags,
   listLessonNotes,
   recordLessonProgress,
   updateLessonNote,
   updateLessonJournal,
-  updateLessonMetadata
+  updateLessonMetadata,
+  updateLessonTags
 } from "../services/learning.service.js";
 
 function sendMedia(req, res, media) {
@@ -57,10 +59,19 @@ export function createLessonsRouter() {
           q: req.query.q || "",
           status: req.query.status || "",
           favorite: req.query.favorite === "1" || req.query.favorite === "true",
+          tag: req.query.tag || "",
           limit: req.query.limit || 100
         }),
         error: null
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/tags", (_req, res, next) => {
+    try {
+      res.json({ data: listTags(), error: null });
     } catch (error) {
       next(error);
     }
@@ -143,6 +154,17 @@ export function createLessonsRouter() {
     try {
       res.json({
         data: updateLessonMetadata(req.params.id, req.body),
+        error: null
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.patch("/:id/tags", (req, res, next) => {
+    try {
+      res.json({
+        data: updateLessonTags(req.params.id, req.body),
         error: null
       });
     } catch (error) {

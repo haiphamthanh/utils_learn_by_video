@@ -11,6 +11,7 @@ import {
   markLessonsAsExported,
   shareError
 } from "./share.service.js";
+import { normalizeTagNames, replaceLessonTags } from "./tag.service.js";
 
 function nowIso() {
   return new Date().toISOString();
@@ -385,6 +386,11 @@ function importOneLesson(db, zip, manifestEntry, options = {}) {
       importedProgress.lastOpenedAt || null,
       importedProgress.lastCompletedAt || null
     );
+
+    const importedTags = normalizeTagNames(
+      importedLessonArtifact.learning?.tags || [topic].filter(Boolean)
+    );
+    replaceLessonTags(lessonId, importedTags, db, timestamp);
 
     upsertRegistryEntry({
       slug,

@@ -11,11 +11,54 @@
     document.getElementById(ROOT_ID)?.remove();
   }
 
+  function findVideoRect() {
+    const video = document.querySelector("video");
+    if (!video) return null;
+    let el = video;
+    for (let i = 0; i < 8; i++) {
+      if (!el.parentElement) break;
+      el = el.parentElement;
+      const r = el.getBoundingClientRect();
+      if (r.width >= 280 && r.height >= 320) break;
+    }
+    return el.getBoundingClientRect();
+  }
+
   function setStatus(root, text, kind) {
-    const status = root.querySelector("[data-ej-status]");
-    if (!status) return;
-    status.textContent = text || "";
-    status.dataset.kind = kind || "";
+    const el = root.querySelector("[data-ej-status]");
+    if (!el) return;
+    el.textContent = text || "";
+    el.dataset.kind = kind || "";
+  }
+
+  function togglePopover(root) {
+    const popover = root.querySelector("[data-ej-popover]");
+    const btn = root.querySelector("[data-ej-btn]");
+    if (popover.dataset.visible === "true") {
+      popover.dataset.visible = "false";
+      return;
+    }
+
+    const btnRect = btn.getBoundingClientRect();
+    const pw = 280;
+    let left = btnRect.left - pw - 10;
+    let top = btnRect.top;
+
+    if (left < 10) {
+      left = btnRect.right + 10;
+    }
+    if (left + pw > window.innerWidth - 8) {
+      left = window.innerWidth - pw - 8;
+    }
+    if (top < 8) top = 8;
+    if (top > window.innerHeight - 220) {
+      top = window.innerHeight - 220;
+    }
+
+    popover.style.top = top + "px";
+    popover.style.left = left + "px";
+    popover.dataset.visible = "true";
+    root.querySelector("[data-ej-note]")?.focus();
   }
 
   function render() {
@@ -33,155 +76,161 @@
         <style>
           #${ROOT_ID} {
             position: fixed;
-            right: 18px;
-            bottom: 18px;
             z-index: 2147483647;
-            width: min(330px, calc(100vw - 32px));
             font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            color: #201f1d;
+            color: #2c2a27;
           }
+          #${ROOT_ID} * { box-sizing: border-box; }
 
-          #${ROOT_ID} * {
-            box-sizing: border-box;
-          }
-
-          #${ROOT_ID} .ej-panel {
-            display: grid;
-            gap: 10px;
-            padding: 14px;
-            border: 1px solid rgb(255 255 255 / 62%);
-            border-radius: 14px;
-            background: rgb(255 253 248 / 96%);
-            box-shadow: 0 18px 60px rgb(0 0 0 / 24%);
-            backdrop-filter: blur(14px);
-          }
-
-          #${ROOT_ID} .ej-top {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
-            gap: 10px;
+          #${ROOT_ID} .ej-btn {
+            position: fixed;
+            width: 44px;
+            height: 44px;
+            border: 1.5px solid rgb(255 255 255 / 72%);
+            border-radius: 50%;
+            background: rgb(31 91 73 / 88%);
+            color: #fff;
+            font-size: 18px;
+            font-weight: 800;
+            line-height: 1;
+            cursor: pointer;
+            box-shadow: 0 4px 18px rgb(0 0 0 / 30%);
+            backdrop-filter: blur(10px);
+            display: flex;
             align-items: center;
+            justify-content: center;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+          }
+          #${ROOT_ID} .ej-btn:hover {
+            transform: scale(1.09);
+            background: rgb(31 91 73 / 96%);
+            box-shadow: 0 6px 24px rgb(0 0 0 / 36%);
+          }
+          #${ROOT_ID} .ej-btn svg {
+            width: 20px;
+            height: 20px;
+            display: block;
+            fill: none;
+            stroke: #fff;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
           }
 
-          #${ROOT_ID} .ej-label {
-            margin: 0 0 4px;
+          #${ROOT_ID} .ej-popover {
+            position: fixed;
+            width: 280px;
+            padding: 14px;
+            border: 1px solid rgb(255 255 255 / 70%);
+            border-radius: 14px;
+            background: rgb(247 246 241 / 97%);
+            box-shadow: 0 14px 48px rgb(0 0 0 / 26%);
+            backdrop-filter: blur(14px);
+            display: none;
+          }
+          #${ROOT_ID} .ej-popover[data-visible="true"] { display: block; }
+
+          #${ROOT_ID} .ej-popover-label {
+            margin: 0 0 8px;
             color: #1f5b49;
             font-size: 11px;
             font-weight: 800;
             letter-spacing: 0.08em;
             text-transform: uppercase;
           }
-
-          #${ROOT_ID} .ej-title {
-            margin: 0;
-            overflow: hidden;
-            color: #201f1d;
-            font-size: 14px;
-            font-weight: 800;
-            line-height: 1.35;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-          }
-
-          #${ROOT_ID} .ej-toggle,
-          #${ROOT_ID} .ej-save {
-            border: 0;
-            border-radius: 999px;
-            font: inherit;
-            font-weight: 800;
-            cursor: pointer;
-          }
-
-          #${ROOT_ID} .ej-toggle {
-            width: 36px;
-            height: 36px;
-            background: #dcece5;
-            color: #174637;
-          }
-
-          #${ROOT_ID} .ej-body[hidden] {
-            display: none;
-          }
-
-          #${ROOT_ID} textarea {
+          #${ROOT_ID} .ej-popover textarea {
             width: 100%;
             min-height: 76px;
             resize: vertical;
-            border: 1px solid #ddd6ca;
+            border: 1px solid #e3dfd5;
             border-radius: 10px;
             padding: 10px 11px;
-            background: #ffffff;
-            color: #201f1d;
+            background: #fff;
+            color: #2c2a27;
             font: inherit;
             font-size: 13px;
             line-height: 1.45;
+            margin-bottom: 10px;
           }
-
-          #${ROOT_ID} .ej-actions {
+          #${ROOT_ID} .ej-popover textarea:focus {
+            outline: none;
+            border-color: #1f5b49;
+            box-shadow: 0 0 0 3px rgb(31 91 73 / 14%);
+          }
+          #${ROOT_ID} .ej-popover-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 10px;
           }
-
-          #${ROOT_ID} .ej-status {
+          #${ROOT_ID} .ej-popover-status {
             min-width: 0;
-            color: #6f6a61;
+            color: #79756d;
             font-size: 12px;
             line-height: 1.35;
           }
+          #${ROOT_ID} .ej-popover-status[data-kind="error"] { color: #8a2d2d; }
+          #${ROOT_ID} .ej-popover-status[data-kind="success"] { color: #1f5b49; font-weight: 800; }
 
-          #${ROOT_ID} .ej-status[data-kind="error"] {
-            color: #8a2d2d;
-          }
-
-          #${ROOT_ID} .ej-status[data-kind="success"] {
-            color: #1f5b49;
-            font-weight: 800;
-          }
-
-          #${ROOT_ID} .ej-save {
+          #${ROOT_ID} .ej-popover-save {
             flex: 0 0 auto;
-            padding: 10px 14px;
+            padding: 8px 16px;
+            border: 0;
+            border-radius: 999px;
             background: #1f5b49;
             color: #fff;
+            font: inherit;
+            font-size: 13px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: opacity 0.15s;
           }
-
-          #${ROOT_ID} .ej-save:disabled {
-            cursor: wait;
-            opacity: 0.68;
-          }
+          #${ROOT_ID} .ej-popover-save:disabled { cursor: wait; opacity: 0.68; }
         </style>
-        <div class="ej-panel">
-          <div class="ej-top">
-            <div>
-              <p class="ej-label" data-ej-label></p>
-              <p class="ej-title" data-ej-title></p>
-            </div>
-            <button class="ej-toggle" type="button" data-ej-toggle aria-label="Toggle save panel">EJ</button>
-          </div>
-          <div class="ej-body" data-ej-body hidden>
-            <textarea data-ej-note placeholder="Why save this?"></textarea>
-            <div class="ej-actions">
-              <span class="ej-status" data-ej-status></span>
-              <button class="ej-save" type="button" data-ej-save>Save</button>
-            </div>
+        <button class="ej-btn" data-ej-btn aria-label="Save to Enjoy Journal">
+          <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+        </button>
+        <div class="ej-popover" data-ej-popover>
+          <p class="ej-popover-label">Save this moment</p>
+          <textarea data-ej-note placeholder="Why save this?"></textarea>
+          <div class="ej-popover-row">
+            <span class="ej-popover-status" data-ej-status></span>
+            <button class="ej-popover-save" type="button" data-ej-save>Save</button>
           </div>
         </div>
       `;
       document.documentElement.append(root);
 
-      root.querySelector("[data-ej-toggle]").addEventListener("click", () => {
-        const body = root.querySelector("[data-ej-body]");
-        body.hidden = !body.hidden;
-        if (!body.hidden) root.querySelector("[data-ej-note]")?.focus();
+      root.querySelector("[data-ej-btn]").addEventListener("click", (e) => {
+        e.stopPropagation();
+        togglePopover(root);
+      });
+      root.querySelector("[data-ej-save]").addEventListener("click", (e) => {
+        e.stopPropagation();
+        save(root);
       });
 
-      root.querySelector("[data-ej-save]").addEventListener("click", () => save(root));
+      document.addEventListener("click", (e) => {
+        const popover = root.querySelector("[data-ej-popover]");
+        if (popover.dataset.visible !== "true") return;
+        if (!root.contains(e.target)) {
+          popover.dataset.visible = "false";
+        }
+      }, true);
     }
 
-    root.querySelector("[data-ej-label]").textContent = capture.label;
-    root.querySelector("[data-ej-title]").textContent = capture.title;
+    const videoRect = findVideoRect();
+    const btn = root.querySelector("[data-ej-btn]");
+    if (videoRect) {
+      btn.style.top = (videoRect.top + 12) + "px";
+      btn.style.left = (videoRect.right - 56) + "px";
+      btn.style.display = "flex";
+    } else {
+      btn.style.top = "12px";
+      btn.style.right = "12px";
+      btn.style.left = "auto";
+      btn.style.display = "flex";
+    }
   }
 
   async function save(root) {
@@ -206,15 +255,16 @@
     }, (response) => {
       button.disabled = false;
       button.textContent = "Save";
-
       if (chrome.runtime.lastError || !response?.ok) {
         setStatus(root, response?.error?.message || chrome.runtime.lastError?.message || "Could not save.", "error");
         return;
       }
-
       note.value = "";
       setStatus(root, "Saved and analyzing.", "success");
-      window.setTimeout(() => setStatus(root, "", ""), 1800);
+      window.setTimeout(() => {
+        setStatus(root, "", "");
+        root.querySelector("[data-ej-popover]").dataset.visible = "false";
+      }, 1600);
     });
   }
 
@@ -232,8 +282,8 @@
   }
 
   lastUrl = location.href;
-  render();
   watchUrl();
+  render();
   new MutationObserver(scheduleRender).observe(document.documentElement, {
     childList: true,
     subtree: true
