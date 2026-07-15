@@ -1,4 +1,5 @@
-const DEFAULT_API_BASE_URL = "http://localhost:3000";
+const DEFAULT_API_BASE_URL = "http://localhost:9090";
+const LEGACY_API_BASE_URL = "http://localhost:3000";
 const REQUEST_TIMEOUT_MS = 6000;
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -15,7 +16,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     .catch((error) => {
       sendResponse({
         ok: false,
-        error: normalizeError(error)
+        error: normalizeError(error),
       });
     });
 
@@ -27,7 +28,7 @@ async function handleMessage(message = {}) {
     case "GET_SETTINGS":
       return {
         ok: true,
-        data: await getSettings()
+        data: await getSettings(),
       };
 
     case "SAVE_SETTINGS": {
@@ -35,7 +36,7 @@ async function handleMessage(message = {}) {
       await chrome.storage.local.set({ apiBaseUrl });
       return {
         ok: true,
-        data: { apiBaseUrl }
+        data: { apiBaseUrl },
       };
     }
 
@@ -51,7 +52,7 @@ async function handleMessage(message = {}) {
       const data = await apiRequest(settings.apiBaseUrl, "/api/inbox", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           source: {
@@ -59,11 +60,11 @@ async function handleMessage(message = {}) {
             url: capture.url,
             title: capture.title,
             platform: capture.platform,
-            capturedAt: new Date().toISOString()
+            capturedAt: new Date().toISOString(),
           },
           personalNote: capture.personalNote,
-          autoProcess: true
-        })
+          autoProcess: true,
+        }),
       });
 
       await showSavedBadge();
@@ -71,13 +72,16 @@ async function handleMessage(message = {}) {
         ok: true,
         data: {
           item: data,
-          inboxUrl: `${settings.apiBaseUrl}/?page=inbox`
-        }
+          inboxUrl: `${settings.apiBaseUrl}/?page=inbox`,
+        },
       };
     }
 
     default:
-      throw createError("MESSAGE_UNSUPPORTED", "Unsupported extension request.");
+      throw createError(
+        "MESSAGE_UNSUPPORTED",
+        "Unsupported extension request.",
+      );
   }
 }
 
@@ -85,34 +89,51 @@ async function ensureDefaultSettings() {
   const stored = await chrome.storage.local.get(["apiBaseUrl"]);
   if (!stored.apiBaseUrl) {
     await chrome.storage.local.set({ apiBaseUrl: DEFAULT_API_BASE_URL });
+    return;
+  }
+  if (stored.apiBaseUrl === LEGACY_API_BASE_URL || stored.apiBaseUrl === `${LEGACY_API_BASE_URL}/`) {
+    await chrome.storage.local.set({ apiBaseUrl: DEFAULT_API_BASE_URL });
   }
 }
 
 async function getSettings() {
   const stored = await chrome.storage.local.get(["apiBaseUrl"]);
+  let apiBaseUrl = stored.apiBaseUrl || DEFAULT_API_BASE_URL;
+  if (apiBaseUrl === LEGACY_API_BASE_URL || apiBaseUrl === `${LEGACY_API_BASE_URL}/`) {
+    apiBaseUrl = DEFAULT_API_BASE_URL;
+    await chrome.storage.local.set({ apiBaseUrl: DEFAULT_API_BASE_URL });
+  }
   return {
-    apiBaseUrl: normalizeApiBaseUrl(stored.apiBaseUrl || DEFAULT_API_BASE_URL)
+    apiBaseUrl: normalizeApiBaseUrl(apiBaseUrl),
   };
 }
 
 function normalizeApiBaseUrl(input) {
-  const value = String(input || DEFAULT_API_BASE_URL).trim().replace(/\/+$/, "");
+  const value = String(input || DEFAULT_API_BASE_URL)
+    .trim()
+    .replace(/\/+$/, "");
   let parsed;
 
   try {
     parsed = new URL(value);
   } catch {
-    throw createError("API_URL_INVALID", "Use a valid local Enjoy Journal URL.");
+    throw createError(
+      "API_URL_INVALID",
+      "Use a valid local Enjoy Journal URL.",
+    );
   }
 
   if (parsed.protocol !== "http:") {
-    throw createError("API_URL_INVALID", "The MVP extension supports local HTTP only.");
+    throw createError(
+      "API_URL_INVALID",
+      "The MVP extension supports local HTTP only.",
+    );
   }
 
   if (!["localhost", "127.0.0.1"].includes(parsed.hostname)) {
     throw createError(
       "API_URL_NOT_LOCAL",
-      "The MVP extension only connects to localhost or 127.0.0.1."
+      "The MVP extension only connects to localhost or 127.0.0.1.",
     );
   }
 
@@ -124,7 +145,11 @@ function normalizeApiBaseUrl(input) {
 
 function validateCapture(input = {}) {
   const sourceType = String(input.sourceType || "other-url");
-  const allowedSourceTypes = new Set(["facebook-reel", "youtube-short", "other-url"]);
+  const allowedSourceTypes = new Set([
+    "facebook-reel",
+    "youtube-short",
+    "other-url",
+  ]);
 
   if (!allowedSourceTypes.has(sourceType)) {
     throw createError("SOURCE_TYPE_INVALID", "Unsupported source type.");
@@ -134,7 +159,10 @@ function validateCapture(input = {}) {
   try {
     url = new URL(String(input.url || ""));
   } catch {
-    throw createError("SOURCE_URL_INVALID", "This page does not have a valid web URL.");
+    throw createError(
+      "SOURCE_URL_INVALID",
+      "This page does not have a valid web URL.",
+    );
   }
 
   if (!["http:", "https:"].includes(url.protocol)) {
@@ -145,8 +173,13 @@ function validateCapture(input = {}) {
     sourceType,
     platform: input.platform ? String(input.platform) : null,
     url: url.toString(),
-    title: String(input.title || "").trim().slice(0, 500) || null,
-    personalNote: String(input.personalNote || "").trim().slice(0, 4000)
+    title:
+      String(input.title || "")
+        .trim()
+        .slice(0, 500) || null,
+    personalNote: String(input.personalNote || "")
+      .trim()
+      .slice(0, 4000),
   };
 }
 
@@ -157,14 +190,14 @@ async function apiRequest(baseUrl, pathname, options = {}) {
   try {
     const response = await fetch(`${baseUrl}${pathname}`, {
       ...options,
-      signal: controller.signal
+      signal: controller.signal,
     });
 
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
       throw createError(
         payload?.error?.code || "API_REQUEST_FAILED",
-        payload?.error?.message || `Enjoy Journal returned ${response.status}.`
+        payload?.error?.message || `Enjoy Journal returned ${response.status}.`,
       );
     }
 
@@ -173,7 +206,7 @@ async function apiRequest(baseUrl, pathname, options = {}) {
     if (error?.name === "AbortError") {
       throw createError(
         "SERVER_TIMEOUT",
-        "Enjoy Journal did not respond. Make sure ./start.sh is running."
+        "Enjoy Journal did not respond. Make sure ./start.sh is running.",
       );
     }
 
@@ -181,7 +214,7 @@ async function apiRequest(baseUrl, pathname, options = {}) {
 
     throw createError(
       "SERVER_UNREACHABLE",
-      "Cannot reach Enjoy Journal. Start the app and try again."
+      `Cannot reach Enjoy Journal at ${baseUrl}. Start the app and try again.`,
     );
   } finally {
     clearTimeout(timeout);
@@ -205,6 +238,6 @@ function createError(code, message) {
 function normalizeError(error) {
   return {
     code: error?.code || "EXTENSION_ERROR",
-    message: error?.message || "The extension could not complete this request."
+    message: error?.message || "The extension could not complete this request.",
   };
 }

@@ -1950,12 +1950,13 @@ button {
   background: var(--bg);
 }
 
-.lesson-transcript-line.is-selected {
-  box-shadow: inset 3px 0 0 var(--accent);
+.lesson-transcript-line.is-selected:not(.is-active) {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 .lesson-transcript-line.is-active {
   background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .lesson-transcript-time {
