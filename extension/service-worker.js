@@ -62,6 +62,7 @@ async function handleMessage(message = {}) {
             platform: capture.platform,
             capturedAt: new Date().toISOString(),
           },
+          language: capture.language,
           personalNote: capture.personalNote,
           autoProcess: true,
         }),
@@ -169,6 +170,14 @@ function validateCapture(input = {}) {
     throw createError("SOURCE_URL_INVALID", "Only web pages can be saved.");
   }
 
+  const language = String(input.language || "").trim().toLowerCase();
+  if (!["en", "ja", "zh"].includes(language)) {
+    throw createError(
+      "SOURCE_LANGUAGE_INVALID",
+      "Choose English, Japanese, or Chinese before saving.",
+    );
+  }
+
   return {
     sourceType,
     platform: input.platform ? String(input.platform) : null,
@@ -177,6 +186,7 @@ function validateCapture(input = {}) {
       String(input.title || "")
         .trim()
         .slice(0, 500) || null,
+    language,
     personalNote: String(input.personalNote || "")
       .trim()
       .slice(0, 4000),

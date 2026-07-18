@@ -14,6 +14,7 @@ const ALLOWED_SOURCE_TYPES = new Set([
   "uploaded-file",
   "other-url"
 ]);
+const ALLOWED_SOURCE_LANGUAGES = new Set(["en", "ja", "zh"]);
 
 function nowIso() {
   return new Date().toISOString();
@@ -51,6 +52,16 @@ export function createInboxItem(payload = {}) {
     throw badRequest("SOURCE_URL_REQUIRED", "A source URL is required.");
   }
 
+  const sourceLanguage = String(
+    payload.language || config.transcriptionLanguage || "en"
+  ).trim().toLowerCase();
+  if (!ALLOWED_SOURCE_LANGUAGES.has(sourceLanguage)) {
+    throw badRequest(
+      "SOURCE_LANGUAGE_INVALID",
+      "Language must be one of: en, ja, zh."
+    );
+  }
+
   const createdAt = nowIso();
   const sourceId = makeId("source");
   const inboxId = makeId("inbox");
@@ -73,12 +84,13 @@ export function createInboxItem(payload = {}) {
 
     db.prepare(`
       INSERT INTO inbox_items (
-        id, source_id, status, personal_note, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?)
+        id, source_id, status, source_language, personal_note, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
       inboxId,
       sourceId,
       "WAITING_MEDIA",
+      sourceLanguage,
       payload.personalNote || "",
       createdAt,
       createdAt
@@ -96,6 +108,7 @@ export function listInboxItems({ status = null } = {}) {
     SELECT
       i.id,
       i.status,
+      i.source_language AS sourceLanguage,
       i.personal_note AS personalNote,
       i.error_code AS errorCode,
       i.error_message AS errorMessage,

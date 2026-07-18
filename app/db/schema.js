@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS inbox_items (
   id TEXT PRIMARY KEY,
   source_id TEXT,
   status TEXT NOT NULL,
+  source_language TEXT NOT NULL DEFAULT 'en',
   personal_note TEXT,
   error_code TEXT,
   error_message TEXT,

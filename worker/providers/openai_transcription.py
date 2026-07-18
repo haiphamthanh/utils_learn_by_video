@@ -60,7 +60,7 @@ class OpenAITranscriptionProvider(TranscriptionProvider):
             )
 
         return {
-            "language": str(payload.get("language") or language or "unknown"),
+            "language": str(language or payload.get("language") or "unknown"),
             "text": str(payload.get("text", "")).strip(),
             "segments": segments,
             "provider": "openai",

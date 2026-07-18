@@ -24,10 +24,22 @@ def _effective_text(segment: dict[str, Any]) -> str:
     ).strip()
 
 
-def _chunk(text: str, max_words: int = 5) -> list[str]:
-    parts = [part.strip() for part in re.split(r"[,;:.!?]+", text) if part.strip()]
+def _chunk(text: str, language: str, max_words: int = 5, max_cjk_chars: int = 12) -> list[str]:
+    parts = [
+        part.strip()
+        for part in re.split(r"[,;:.!?、，。！？；]+", text)
+        if part.strip()
+    ]
     chunks: list[str] = []
     for part in parts:
+        if language in {"ja", "zh"}:
+            chunks.extend(
+                part[index:index + max_cjk_chars]
+                for index in range(0, len(part), max_cjk_chars)
+                if part[index:index + max_cjk_chars]
+            )
+            continue
+
         words = part.split()
         for index in range(0, len(words), max_words):
             value = " ".join(words[index:index + max_words]).strip()
@@ -46,7 +58,7 @@ def _title(payload: dict[str, Any], segments: list[dict[str, Any]]) -> str:
         if candidate:
             candidate = re.sub(r"\s+", " ", candidate)
             return candidate[:72].rstrip(" .,!?")
-    return "A Small English Moment"
+    return "A Small Language Moment"
 
 
 class LocalBasicLessonProvider(LessonProvider):
@@ -60,28 +72,30 @@ class LocalBasicLessonProvider(LessonProvider):
         on_progress: ProgressCallback,
     ) -> dict[str, Any]:
         segments = payload.get("transcript", {}).get("segments", [])
+        language = str(payload.get("transcript", {}).get("language") or "en").lower()
         on_progress("ANALYZE_TRANSCRIPT", 35)
 
         key_phrases: list[dict[str, Any]] = []
         patterns: list[dict[str, Any]] = []
         used_phrases: set[str] = set()
 
-        for segment in segments:
-            text = _effective_text(segment)
-            for regex, phrase, explanation in USEFUL_PATTERNS:
-                if regex.search(text) and phrase not in used_phrases:
-                    used_phrases.add(phrase)
-                    key_phrases.append({
-                        "phrase": phrase,
-                        "meaningVi": explanation,
-                        "whyUseful": explanation,
-                        "sourceSegmentIds": [segment["id"]],
-                    })
-                    patterns.append({
-                        "pattern": phrase,
-                        "explanationVi": explanation,
-                        "example": text,
-                    })
+        if language == "en":
+            for segment in segments:
+                text = _effective_text(segment)
+                for regex, phrase, explanation in USEFUL_PATTERNS:
+                    if regex.search(text) and phrase not in used_phrases:
+                        used_phrases.add(phrase)
+                        key_phrases.append({
+                            "phrase": phrase,
+                            "meaningVi": explanation,
+                            "whyUseful": explanation,
+                            "sourceSegmentIds": [segment["id"]],
+                        })
+                        patterns.append({
+                            "pattern": phrase,
+                            "explanationVi": explanation,
+                            "example": text,
+                        })
 
         if not key_phrases:
             for segment in segments[:3]:
@@ -98,7 +112,7 @@ class LocalBasicLessonProvider(LessonProvider):
         shadowing = [
             {
                 "segmentId": segment["id"],
-                "chunks": _chunk(_effective_text(segment)),
+                "chunks": _chunk(_effective_text(segment), language),
             }
             for segment in segments
             if _effective_text(segment)

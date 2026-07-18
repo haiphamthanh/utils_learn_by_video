@@ -152,6 +152,17 @@
             line-height: 1.45;
             margin-bottom: 10px;
           }
+          #${ROOT_ID} .ej-popover select {
+            width: 100%;
+            border: 1px solid #e3dfd5;
+            border-radius: 10px;
+            padding: 9px 10px;
+            background: #fff;
+            color: #2c2a27;
+            font: inherit;
+            font-size: 13px;
+            margin-bottom: 10px;
+          }
           #${ROOT_ID} .ej-popover textarea:focus {
             outline: none;
             border-color: #1f5b49;
@@ -192,6 +203,11 @@
         </button>
         <div class="ej-popover" data-ej-popover>
           <p class="ej-popover-label">Save this moment</p>
+          <select data-ej-language aria-label="Video language" required>
+            <option value="en">English</option>
+            <option value="ja">日本語 (Japanese)</option>
+            <option value="zh">中文 (Chinese)</option>
+          </select>
           <textarea data-ej-note placeholder="Why save this?"></textarea>
           <div class="ej-popover-row">
             <span class="ej-popover-status" data-ej-status></span>
@@ -250,6 +266,7 @@
         platform: capture.platform,
         url: capture.url,
         title: capture.title,
+        language: root.querySelector("[data-ej-language]").value,
         personalNote: note.value
       }
     }, (response) => {

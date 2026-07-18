@@ -10,6 +10,7 @@ const sourceTypeLabel = document.querySelector("#source-type");
 const sourceTitle = document.querySelector("#source-title");
 const sourceUrl = document.querySelector("#source-url");
 const pageState = document.querySelector("#page-state");
+const sourceLanguage = document.querySelector("#source-language");
 const personalNote = document.querySelector("#personal-note");
 const message = document.querySelector("#message");
 const saveButton = document.querySelector("#save-button");
@@ -145,6 +146,7 @@ async function handleSave(event) {
     type: "SAVE_CAPTURE",
     capture: {
       ...capture,
+      language: sourceLanguage.value,
       personalNote: personalNote.value
     }
   });

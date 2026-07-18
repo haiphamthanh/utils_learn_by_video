@@ -56,6 +56,14 @@ function initializeDatabaseConnection(databasePath) {
     // column already exists — safe to ignore
   }
 
+  try {
+    connection.exec(
+      "ALTER TABLE inbox_items ADD COLUMN source_language TEXT NOT NULL DEFAULT 'en'",
+    );
+  } catch {
+    // column already exists — safe to ignore
+  }
+
   return connection;
 }
 

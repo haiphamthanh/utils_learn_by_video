@@ -16,9 +16,13 @@ function makeId(prefix) {
 }
 
 
-function cleanTranscriptText(value) {
+function cleanTranscriptText(value, language = "en") {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   if (!text) return "";
+
+  if (["ja", "zh"].includes(language)) {
+    return /[。！？!?]$/.test(text) ? text : `${text}。`;
+  }
 
   const capitalized = text.charAt(0).toUpperCase() + text.slice(1);
   return /[.!?]$/.test(capitalized) ? capitalized : `${capitalized}.`;
@@ -37,6 +41,7 @@ function getTarget(inboxItemId) {
     SELECT
       i.id AS inboxItemId,
       i.status,
+      i.source_language AS sourceLanguage,
       m.id AS mediaAssetId,
       m.normalized_audio_path AS audioPath
     FROM inbox_items i
@@ -45,11 +50,15 @@ function getTarget(inboxItemId) {
   `).get(inboxItemId);
 }
 
-function getProviderConfig() {
+function getProviderConfig(language) {
   const provider = config.transcriptionProvider;
-  const model = provider === "openai"
+  let model = provider === "openai"
     ? config.openaiTranscriptionModel
     : config.transcriptionModel;
+
+  if (provider === "local-whisper" && language !== "en" && model.endsWith(".en")) {
+    model = model.slice(0, -3);
+  }
 
   return { provider, model };
 }
@@ -169,7 +178,7 @@ function persistTranscript({ inboxItemId, mediaAssetId, outputPath, jobId }) {
         segment.startMs,
         segment.endMs,
         segment.text,
-        cleanTranscriptText(segment.text),
+        cleanTranscriptText(segment.text, payload.language),
         segment.confidence ?? null
       );
     });
@@ -198,7 +207,8 @@ async function runTranscriptionJob({
   mediaAssetId,
   audioPath,
   provider,
-  model
+  model,
+  language
 }) {
   const resolvedAudioPath = toAbsoluteDataPath(audioPath);
   const transcriptDirectory = path.join(
@@ -216,7 +226,7 @@ async function runTranscriptionJob({
     "--output", outputPath,
     "--provider", provider,
     "--model", model,
-    "--language", config.transcriptionLanguage,
+    "--language", language,
     "--device", config.whisperDevice
   ];
 
@@ -325,7 +335,8 @@ export function startTranscription(inboxItemId) {
     );
   }
 
-  const { provider, model } = getProviderConfig();
+  const language = target.sourceLanguage;
+  const { provider, model } = getProviderConfig(language);
   const jobId = makeId("transcription_job");
   const timestamp = nowIso();
 
@@ -361,7 +372,8 @@ export function startTranscription(inboxItemId) {
       mediaAssetId: target.mediaAssetId,
       audioPath: target.audioPath,
       provider,
-      model
+      model,
+      language
     });
   });
 
@@ -452,7 +464,7 @@ export function getTranscript(inboxItemId) {
 
   for (const segment of segments) {
     if (!segment.cleanedText) {
-      segment.cleanedText = cleanTranscriptText(segment.rawText);
+      segment.cleanedText = cleanTranscriptText(segment.rawText, transcript.language);
       updateCleaned.run(segment.cleanedText, segment.id);
       cleanedLegacySegments = true;
     }

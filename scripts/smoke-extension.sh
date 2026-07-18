@@ -104,6 +104,12 @@ grep -q '"/api/inbox"' extension/service-worker.js
 
 echo "Checking Inbox deep link support..."
 grep -q 'URLSearchParams' public/js/app.js
-grep -q 'supportedInitialPages' public/js/app.js
+grep -q 'supportedPages' public/js/app.js
+
+echo "Checking explicit language selection..."
+grep -q 'id="source-language"' extension/popup.html
+grep -q 'data-ej-language' extension/floating-save.js
+grep -q 'language: capture.language' extension/service-worker.js
+grep -q 'SOURCE_LANGUAGE_INVALID' extension/service-worker.js
 
 echo "✓ Extension smoke test passed."

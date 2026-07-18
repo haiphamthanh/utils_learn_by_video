@@ -308,6 +308,8 @@ Open Facebook Reel / YouTube Short / useful page
         ↓
 Click extension icon
         ↓
+Choose English / Japanese / Chinese
+        ↓
 Add a short note
         ↓
 Save & analyze
@@ -326,6 +328,11 @@ http://localhost:3000
 ```
 
 The popup can save a different localhost port. The MVP intentionally rejects arbitrary remote server URLs.
+
+The selected video language is stored on the Inbox item and passed explicitly to
+the transcription worker. The server does not auto-detect the language. Local
+Whisper automatically switches from an English-only `.en` model name to its
+multilingual counterpart for Japanese and Chinese captures.
 
 ### Source cleanup
 
@@ -816,4 +823,3 @@ yarn repair:python
 ```
 
 This only removes `.venv`; it does not touch `data/`, SQLite, media, transcripts or lessons.
-

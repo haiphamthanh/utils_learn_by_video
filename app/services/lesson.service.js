@@ -17,9 +17,14 @@ function makeId(prefix) {
 }
 
 
-function cleanTranscriptText(value) {
+function cleanTranscriptText(value, language = "en") {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   if (!text) return "";
+
+  if (["ja", "zh"].includes(language)) {
+    return /[。！？!?]$/.test(text) ? text : `${text}。`;
+  }
+
   const capitalized = text.charAt(0).toUpperCase() + text.slice(1);
   return /[.!?]$/.test(capitalized) ? capitalized : `${capitalized}.`;
 }
@@ -37,7 +42,7 @@ function ensureCleanedSegments(target) {
   let changed = false;
   for (const segment of target.segments) {
     if (!segment.cleanedText) {
-      segment.cleanedText = cleanTranscriptText(segment.rawText);
+      segment.cleanedText = cleanTranscriptText(segment.rawText, target.language);
       update.run(segment.cleanedText, segment.id);
       changed = true;
     }

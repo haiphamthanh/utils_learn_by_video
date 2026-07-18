@@ -57,7 +57,7 @@ class LocalWhisperProvider(TranscriptionProvider):
             )
 
         return {
-            "language": str(result.get("language") or language or "unknown"),
+            "language": str(language or result.get("language") or "unknown"),
             "text": str(result.get("text", "")).strip(),
             "segments": segments,
             "provider": "local-whisper",

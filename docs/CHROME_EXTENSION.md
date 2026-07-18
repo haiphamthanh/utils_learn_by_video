@@ -11,6 +11,8 @@ Click Enjoy Journal extension
         ↓
 Review current source
         ↓
+Choose English / Japanese / Chinese
+        ↓
 Add a short note
         ↓
 Save & analyze
@@ -73,9 +75,13 @@ chrome://extensions
 
 1. Open a Facebook Reel, YouTube Short, or other useful web page.
 2. Click the extension icon.
-3. Add why the moment is worth saving.
-4. Click **Save & analyze**.
-5. The local server starts importing media and building the lesson automatically. Open Inbox only when you want to watch progress or handle a fallback.
+3. Choose the language spoken in the video: English, Japanese, or Chinese.
+4. Add why the moment is worth saving.
+5. Click **Save & analyze**.
+6. The local server starts importing media and building the lesson automatically. Open Inbox only when you want to watch progress or handle a fallback.
+
+The chosen language is sent as `en`, `ja`, or `zh`, stored with the Inbox item,
+and passed to transcription explicitly. No automatic language detection is used.
 
 ## Connection Settings
 
@@ -107,5 +113,5 @@ yarn extension:package
 Output:
 
 ```text
-dist/enjoy-journal-extension-v0.7.0.zip
+dist/enjoy-journal-extension-v0.8.0.zip
 ```

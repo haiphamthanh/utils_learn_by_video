@@ -68,6 +68,23 @@ class OpenAILessonProvider(LessonProvider):
 
         transcript = payload.get("transcript") or {}
         source = payload.get("source") or {}
+        language = str(transcript.get("language") or "en").lower()
+        language_guidance = {
+            "en": (
+                "The source language is English. Preserve natural spoken English, "
+                "including useful informal forms."
+            ),
+            "ja": (
+                "The source language is Japanese. Explain useful particles, verb forms, "
+                "sentence patterns, and politeness/register. Keep Japanese phrases in their "
+                "original script; include a kana reading in the Vietnamese explanation when useful."
+            ),
+            "zh": (
+                "The source language is Chinese. Explain useful word combinations and sentence "
+                "patterns. Keep Chinese phrases in their original script; include pinyin with tone "
+                "marks in the Vietnamese explanation when useful."
+            ),
+        }.get(language, "Analyze the supplied source language faithfully.")
         compact_input = {
             "source": {
                 "type": source.get("type"),
@@ -75,13 +92,14 @@ class OpenAILessonProvider(LessonProvider):
                 "url": source.get("url"),
             },
             "personalNote": payload.get("personalNote") or "",
+            "language": language,
             "segments": transcript.get("segments") or [],
         }
 
-        instructions = """
-You create compact English-learning lessons for a Vietnamese software/system engineer.
+        instructions = f"""
+You create compact language-learning lessons for a Vietnamese software/system engineer.
 Use only the supplied transcript as source material. Do not invent what the speaker said.
-Preserve natural spoken English, including useful informal forms.
+{language_guidance}
 Rules:
 - Return Vietnamese explanations in clear natural Vietnamese.
 - Maximum 5 key phrases.
@@ -92,7 +110,7 @@ Rules:
 - Maximum 3 comprehension questions.
 - Examples should preferably relate to software engineering, systems, AI, learning, or work communication.
 - difficulty must be one of A1, A2, B1, B2, C1, C2, or UNRATED.
-""".strip()
+        """.strip()
 
         on_progress("GENERATE_WITH_AI", 55)
         response = client.responses.parse(
