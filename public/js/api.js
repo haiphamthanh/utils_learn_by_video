@@ -80,6 +80,61 @@ export function listTags() {
   return request("/api/lessons/tags");
 }
 
+export function createTag(name) {
+  return request("/api/lessons/tags", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name })
+  });
+}
+
+export function renameTag(tagId, name) {
+  return request(`/api/lessons/tags/${encodeURIComponent(tagId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name })
+  });
+}
+
+export function deleteTag(tagId) {
+  return request(`/api/lessons/tags/${encodeURIComponent(tagId)}`, { method: "DELETE" });
+}
+
+export function listNotes({ q = "", tag = "", favorite = false, status = "", limit = 200 } = {}) {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (tag) params.set("tag", tag);
+  if (favorite) params.set("favorite", "1");
+  if (status) params.set("status", status);
+  if (limit) params.set("limit", String(limit));
+  const query = params.toString();
+  return request(`/api/notes${query ? `?${query}` : ""}`);
+}
+
+export function createNote(payload) {
+  return request("/api/notes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+}
+
+export function getNoteDetail(noteId) {
+  return request(`/api/notes/${encodeURIComponent(noteId)}`);
+}
+
+export function updateNoteDetails(noteId, payload) {
+  return request(`/api/notes/${encodeURIComponent(noteId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteNote(noteId) {
+  return request(`/api/notes/${encodeURIComponent(noteId)}`, { method: "DELETE" });
+}
+
 export function getLessonDetail(lessonId) {
   return request(`/api/lessons/${lessonId}`);
 }

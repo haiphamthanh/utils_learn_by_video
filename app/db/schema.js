@@ -174,6 +174,16 @@ CREATE TABLE IF NOT EXISTS lesson_notes (
   FOREIGN KEY(lesson_id) REFERENCES lessons(id)
 );
 
+CREATE TABLE IF NOT EXISTS notes (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  is_favorite INTEGER NOT NULL DEFAULT 0,
+  is_done INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS tags (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -189,6 +199,15 @@ CREATE TABLE IF NOT EXISTS lesson_tags (
   PRIMARY KEY (lesson_id, tag_id),
   FOREIGN KEY(lesson_id) REFERENCES lessons(id),
   FOREIGN KEY(tag_id) REFERENCES tags(id)
+);
+
+CREATE TABLE IF NOT EXISTS note_tags (
+  note_id TEXT NOT NULL,
+  tag_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (note_id, tag_id),
+  FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE,
+  FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS learning_progress (
@@ -266,8 +285,17 @@ CREATE INDEX IF NOT EXISTS idx_lesson_notes_lesson
 CREATE INDEX IF NOT EXISTS idx_lesson_notes_content
   ON lesson_notes(content);
 
+CREATE INDEX IF NOT EXISTS idx_notes_updated_at
+  ON notes(updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_notes_content
+  ON notes(content);
+
 CREATE INDEX IF NOT EXISTS idx_lesson_tags_tag
   ON lesson_tags(tag_id, lesson_id);
+
+CREATE INDEX IF NOT EXISTS idx_note_tags_tag
+  ON note_tags(tag_id, note_id);
 
 CREATE INDEX IF NOT EXISTS idx_learning_progress_status
   ON learning_progress(learning_status, last_opened_at);

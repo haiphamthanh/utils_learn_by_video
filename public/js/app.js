@@ -4,6 +4,14 @@ import {
   getTranscript,
   listLessons,
   listTags,
+  createTag,
+  renameTag,
+  deleteTag,
+  listNotes,
+  createNote,
+  deleteNote,
+  getNoteDetail,
+  updateNoteDetails,
   startAutomaticAnalysis,
   updateTranscriptSegment,
   listShareRegistry,
@@ -25,7 +33,7 @@ import { createLessonPlayer } from "./lesson-player.js";
 import { getUiSettings, updateUiSettings } from "./ui-settings.js";
 
 const pages = [...document.querySelectorAll(".page")];
-const navLinks = [...document.querySelectorAll(".nav-link")];
+const navLinks = [...document.querySelectorAll(".nav-link[data-page]")];
 const dialog = document.querySelector("#capture-dialog");
 const captureForm = document.querySelector("#capture-form");
 const captureError = document.querySelector("#capture-error");
@@ -42,6 +50,8 @@ const journalHero = document.querySelector("#journal-hero");
 const journalResultCount = document.querySelector("#journal-result-count");
 const journalStatusFilters = [...document.querySelectorAll("[data-journal-status]")];
 const journalFavoriteFilters = [...document.querySelectorAll("[data-journal-favorite]")];
+const journalTypeFilters = [...document.querySelectorAll("[data-journal-type]")];
+const journalTypeFilterGroup = document.querySelector("[data-journal-type-filters]");
 const journalTagFilter = document.querySelector("#journal-tag-filter");
 const journalSurprise = document.querySelector("#journal-surprise");
 const journalPhraseOfDay = document.querySelector("#journal-phrase-of-day");
@@ -79,15 +89,35 @@ const metadataForm = document.querySelector("#lesson-metadata-form");
 const metadataError = document.querySelector("#metadata-error");
 const metadataPromptButton = document.querySelector("#metadata-prompt-button");
 const metadataExistingTags = document.querySelector("#metadata-existing-tags");
+const notesNavigation = document.querySelector("[data-notes-navigation]");
+const noteList = document.querySelector("#note-list");
+const noteSearch = document.querySelector("#note-search");
+const noteTagList = document.querySelector("#note-tag-list");
+const noteResultCount = document.querySelector("#note-result-count");
+const noteStatusFilters = [...document.querySelectorAll("[data-note-status]")];
+const noteFavoriteFilter = document.querySelector("[data-note-favorite]");
+const noteDetailDialog = document.querySelector("#note-detail-dialog");
+const noteDetailRoot = document.querySelector("#note-detail-root");
+const noteCreateDialog = document.querySelector("#note-create-dialog");
+const noteCreateForm = document.querySelector("#note-create-form");
+const noteCreateTagChoices = document.querySelector("#note-create-tag-choices");
+const noteCreateError = document.querySelector("#note-create-error");
+const settingsDialog = document.querySelector("#settings-dialog");
+const settingsNoteEnabled = document.querySelector("#settings-note-enabled");
+const settingsTagForm = document.querySelector("#settings-tag-form");
+const settingsTagList = document.querySelector("#settings-tag-list");
+const settingsTagError = document.querySelector("#settings-tag-error");
 
 let shareLessonData = [];
 let shareSelectedIds = new Set();
-const supportedPages = new Set(["journal", "library", "share"]);
+const supportedPages = new Set(["journal", "library", "notes", "share"]);
 const supportedLearningStatuses = new Set(["", "NEW", "LEARNING", "MASTERED"]);
 const restoredUiSettings = getUiSettings();
+let notesEnabled = Boolean(restoredUiSettings.features?.notes);
 let currentPage = supportedPages.has(restoredUiSettings.activePage)
   ? restoredUiSettings.activePage
   : "journal";
+if (currentPage === "notes" && !notesEnabled) currentPage = "journal";
 let currentLibraryStatus = restoredUiSettings.library?.status || "";
 let currentLibraryFavorite = Boolean(restoredUiSettings.library?.favorite);
 let currentLibraryTag = restoredUiSettings.library?.tag || "";
@@ -97,15 +127,52 @@ let currentJournalStatus = supportedLearningStatuses.has(restoredUiSettings.jour
   : "";
 let currentJournalFavorite = Boolean(restoredUiSettings.journal?.favorite);
 let currentJournalTag = restoredUiSettings.journal?.tag || "";
+let currentJournalType = ["all", "video", "note"].includes(restoredUiSettings.journal?.type)
+  ? restoredUiSettings.journal.type
+  : "all";
+let currentNoteTag = restoredUiSettings.notes?.tag || "";
+let currentNoteStatus = ["", "done", "pending"].includes(restoredUiSettings.notes?.status)
+  ? restoredUiSettings.notes.status
+  : "";
+let currentNoteFavorite = Boolean(restoredUiSettings.notes?.favorite);
 let journalOverviewCache = null;
 let journalEntryCache = [];
 let availableTags = [];
 let librarySearchTimer = null;
 let libraryLessonMap = new Map();
 let metadataEditingLesson = null;
+let noteSearchTimer = null;
 
 if (journalSearch) journalSearch.value = restoredUiSettings.journal?.search || "";
 if (librarySearch) librarySearch.value = restoredUiSettings.library?.search || "";
+if (noteSearch) noteSearch.value = restoredUiSettings.notes?.search || "";
+
+function syncNoteFilters() {
+  noteStatusFilters.forEach((filter) => {
+    filter.classList.toggle("is-active", filter.dataset.noteStatus === currentNoteStatus);
+  });
+  if (noteFavoriteFilter) {
+    noteFavoriteFilter.classList.toggle("is-active", currentNoteFavorite);
+    noteFavoriteFilter.textContent = currentNoteFavorite ? "♥" : "♡";
+  }
+}
+
+function syncNoteFeatureVisibility() {
+  if (notesNavigation) {
+    notesNavigation.hidden = !notesEnabled;
+    notesNavigation.disabled = !notesEnabled;
+    notesNavigation.setAttribute("aria-hidden", String(!notesEnabled));
+  }
+  if (journalTypeFilterGroup) journalTypeFilterGroup.hidden = !notesEnabled;
+  if (settingsNoteEnabled) settingsNoteEnabled.checked = notesEnabled;
+  if (!notesEnabled && currentJournalType !== "all") {
+    currentJournalType = "all";
+    updateUiSettings({ journal: { type: "all" } });
+  }
+}
+
+syncNoteFeatureVisibility();
+syncNoteFilters();
 
 function syncJournalFilters() {
   journalStatusFilters.forEach((item) => {
@@ -118,6 +185,9 @@ function syncJournalFilters() {
     item.classList.toggle("is-active", currentJournalFavorite);
   });
   if (journalTagFilter) journalTagFilter.value = currentJournalTag;
+  journalTypeFilters.forEach((item) => {
+    item.classList.toggle("is-active", item.dataset.journalType === currentJournalType);
+  });
 }
 
 function syncLibraryFilters() {
@@ -192,6 +262,7 @@ function saveCurrentScroll() {
 
 async function showPage(pageName, { updateUrl = true, restoreScroll = true } = {}) {
   if (!supportedPages.has(pageName)) pageName = "journal";
+  if (pageName === "notes" && !notesEnabled) pageName = "journal";
   if (currentPage !== pageName) saveCurrentScroll();
   if (lessonDialog?.open) lessonDialog.close();
   if (lessonInfoDialog?.open) lessonInfoDialog.close();
@@ -214,6 +285,7 @@ async function showPage(pageName, { updateUrl = true, restoreScroll = true } = {
 
   if (pageName === "journal") await refreshJournal();
   if (pageName === "library") await refreshLibrary();
+  if (pageName === "notes") await refreshNotes();
   if (pageName === "share") await refreshShare();
 
   if (restoreScroll) {
@@ -260,6 +332,12 @@ function escapeHtml(value) {
   const div = document.createElement("div");
   div.textContent = value ?? "";
   return div.innerHTML;
+}
+
+function excerptText(value, maxLength = 200) {
+  const normalized = String(value || "").replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength).trimEnd()}…`;
 }
 
 function durationLabel(milliseconds) {
@@ -339,7 +417,8 @@ function tagNameKey(value) {
 }
 
 function lessonTagEditorMarkup(tags = []) {
-  const listId = "lesson-tag-suggestions";
+  const assigned = new Set(tags.map((tag) => tag.slug));
+  const selectableTags = availableTags.filter((tag) => !assigned.has(tag.slug));
   return `
     <div class="lesson-tag-editor" data-lesson-tag-editor>
       <div class="lesson-tag-row lesson-info-tag-row">
@@ -355,21 +434,15 @@ function lessonTagEditorMarkup(tags = []) {
             >×</button>
           </span>
         `).join("")}
-        <button class="lesson-tag-add" type="button" title="Add topic tag" aria-label="Add topic tag" data-add-lesson-tag>+</button>
+        <button class="lesson-tag-add" type="button" title="Choose an existing tag" aria-label="Choose an existing tag" data-add-lesson-tag>+</button>
       </div>
-      <form class="lesson-tag-add-form" data-lesson-tag-form hidden>
-        <input
-          type="text"
-          name="tagName"
-          list="${listId}"
-          placeholder="New or existing topic"
-          autocomplete="off"
-        />
-        <datalist id="${listId}">
-          ${availableTags.map((tag) => `<option value="${escapeHtml(tag.name)}"></option>`).join("")}
-        </datalist>
-        <button class="primary-action" type="submit">Add</button>
-      </form>
+      <div class="lesson-tag-existing-picker" data-lesson-tag-picker hidden>
+        ${selectableTags.length
+          ? selectableTags.map((tag) => `
+              <button class="lesson-tag lesson-tag-option" type="button" data-choose-lesson-tag="${escapeHtml(tag.name)}">#${escapeHtml(tag.name)}</button>
+            `).join("")
+          : '<span class="muted-copy">No other tags. Create one in Settings first.</span>'}
+      </div>
       <p class="lesson-tag-editor-error" data-lesson-tag-error hidden></p>
     </div>
   `;
@@ -378,6 +451,7 @@ function lessonTagEditorMarkup(tags = []) {
 function libraryIconSvg(name) {
   const icons = {
     heart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.4 5.4 0 0 0-7.7 0L12 5.7l-1.1-1.1a5.4 5.4 0 0 0-7.7 7.7L12 21l8.8-8.7a5.4 5.4 0 0 0 0-7.7Z"></path></svg>',
+    check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>',
     preview: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>'
   };
   return icons[name] || "";
@@ -611,9 +685,8 @@ async function persistLessonInfoTags(lessonId, item, tagNames) {
 function bindLessonInfoTagEditor(lessonId, item) {
   const editor = lessonInfoRoot.querySelector("[data-lesson-tag-editor]");
   if (!editor) return;
-  const form = editor.querySelector("[data-lesson-tag-form]");
-  const input = form?.elements.tagName;
   const error = editor.querySelector("[data-lesson-tag-error]");
+  const picker = editor.querySelector("[data-lesson-tag-picker]");
 
   const setError = (message = "") => {
     if (!error) return;
@@ -623,10 +696,25 @@ function bindLessonInfoTagEditor(lessonId, item) {
 
   editor.querySelector("[data-add-lesson-tag]")?.addEventListener("click", () => {
     setError("");
-    if (!form) return;
-    form.hidden = !form.hidden;
-    if (!form.hidden) input?.focus();
+    if (picker) picker.hidden = !picker.hidden;
   });
+
+  for (const button of editor.querySelectorAll("[data-choose-lesson-tag]")) {
+    button.addEventListener("click", async () => {
+      const existingNames = (item.tags || []).map((tag) => tag.name);
+      button.disabled = true;
+      setError("");
+      try {
+        await persistLessonInfoTags(lessonId, item, [
+          ...existingNames,
+          button.dataset.chooseLessonTag
+        ]);
+      } catch (errorMessage) {
+        button.disabled = false;
+        setError(errorMessage.message);
+      }
+    });
+  }
 
   for (const button of editor.querySelectorAll("[data-remove-lesson-tag]")) {
     button.addEventListener("click", async () => {
@@ -645,29 +733,6 @@ function bindLessonInfoTagEditor(lessonId, item) {
     });
   }
 
-  form?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const name = String(input?.value || "").trim();
-    if (!name) {
-      setError("Enter a topic tag.");
-      return;
-    }
-    const existingNames = (item.tags || []).map((tag) => tag.name);
-    if (existingNames.some((existing) => tagNameKey(existing) === tagNameKey(name))) {
-      setError("This lesson already has that tag.");
-      input?.select();
-      return;
-    }
-    const submit = form.querySelector("button[type='submit']");
-    submit.disabled = true;
-    setError("");
-    try {
-      await persistLessonInfoTags(lessonId, item, [...existingNames, name]);
-    } catch (errorMessage) {
-      submit.disabled = false;
-      setError(errorMessage.message);
-    }
-  });
 }
 
 async function openLessonInfo(lessonId) {
@@ -994,9 +1059,13 @@ async function refreshJournal() {
 
 function filteredJournalEntries() {
   return journalEntryCache.filter((entry) => {
-    if (currentJournalFavorite && !entry.isFavorite) return false;
-    if (!currentJournalFavorite && currentJournalStatus && readingStatus(entry) !== currentJournalStatus) {
+    if (entry.sourceType === "note" && !notesEnabled) return false;
+    if (notesEnabled && currentJournalType !== "all" && entry.sourceType !== currentJournalType) {
       return false;
+    }
+    if (currentJournalFavorite && !entry.isFavorite) return false;
+    if (!currentJournalFavorite && currentJournalStatus) {
+      if (entry.sourceType === "note" || readingStatus(entry) !== currentJournalStatus) return false;
     }
     if (currentJournalTag && !(entry.tags || []).some((tag) => tag.slug === currentJournalTag)) {
       return false;
@@ -1007,13 +1076,20 @@ function filteredJournalEntries() {
 
 function renderJournalTagOptions(tags) {
   if (!journalTagFilter) return;
-  if (currentJournalTag && !tags.some((tag) => tag.slug === currentJournalTag)) {
+  const journalTags = tags.filter((tag) => {
+    const count = Number(tag.lessonCount || 0) + (notesEnabled ? Number(tag.noteCount || 0) : 0);
+    return count > 0;
+  });
+  if (currentJournalTag && !journalTags.some((tag) => tag.slug === currentJournalTag)) {
     currentJournalTag = "";
     updateUiSettings({ journal: { tag: "" } });
   }
   journalTagFilter.innerHTML = `
     <option value="">All tags</option>
-    ${tags.map((tag) => `<option value="${escapeHtml(tag.slug)}">${escapeHtml(tag.name)} (${tag.lessonCount})</option>`).join("")}
+    ${journalTags.map((tag) => {
+      const count = Number(tag.lessonCount || 0) + (notesEnabled ? Number(tag.noteCount || 0) : 0);
+      return `<option value="${escapeHtml(tag.slug)}">${escapeHtml(tag.name)} (${count})</option>`;
+    }).join("")}
   `;
   journalTagFilter.value = currentJournalTag;
 }
@@ -1069,17 +1145,19 @@ function renderJournalPhraseOfDay(overview) {
 function renderJournalEntries(entries) {
   if (!journalEntries) return;
   if (journalResultCount) {
-    const suffix = entries.length === 1 ? "note" : "notes";
+    const suffix = entries.length === 1 ? "entry" : "entries";
     journalResultCount.textContent = `${entries.length} ${suffix} shown`;
   }
   if (!entries.length) {
     const hasQuery = Boolean(journalSearch?.value.trim());
-    const hasFilter = Boolean(currentJournalStatus || currentJournalFavorite || currentJournalTag);
+    const hasFilter = Boolean(
+      currentJournalStatus || currentJournalFavorite || currentJournalTag || currentJournalType !== "all"
+    );
     journalEntries.innerHTML = `
       <div class="empty-card">
         <span class="empty-icon">◎</span>
-        <h3>${hasQuery || hasFilter ? "No matching notes" : "No journal entries yet"}</h3>
-        <p>${hasQuery || hasFilter ? "Try another search, tag, or learning status." : "Open a lesson and fill in the Journal tab to see your thoughts here."}</p>
+        <h3>${hasQuery || hasFilter ? "No matching entries" : "No journal entries yet"}</h3>
+        <p>${hasQuery || hasFilter ? "Try another search, tag, type, or learning status." : notesEnabled ? "Add a personal Note or fill in a lesson Journal to see it here." : "Open a lesson and fill in the Journal tab to see your thoughts here."}</p>
       </div>
     `;
     return;
@@ -1087,18 +1165,21 @@ function renderJournalEntries(entries) {
 
   const grouped = new Map();
   for (const entry of entries) {
-    const key = entry.lessonId;
+    const key = entry.sourceType === "note" ? `note:${entry.noteId}` : `video:${entry.lessonId}`;
     if (!grouped.has(key)) {
       grouped.set(key, {
         lessonId: entry.lessonId,
         inboxItemId: entry.inboxItemId,
         lessonTitle: entry.lessonTitle,
+        noteId: entry.noteId,
+        sourceType: entry.sourceType || "video",
         lessonSummaryVi: entry.lessonSummaryVi,
         media: entry.media || {},
         tags: entry.tags || [],
         learningStatus: entry.learningStatus,
         viewCount: entry.viewCount,
         isFavorite: entry.isFavorite,
+        isDone: entry.isDone,
         updatedAt: entry.updatedAt,
         entries: []
       });
@@ -1114,7 +1195,8 @@ function renderJournalEntries(entries) {
     WHY_I_SAVED: "Why I saved",
     MY_THOUGHT: "My thought",
     FAVORITE_PHRASE: "Favorite phrase",
-    MY_EXAMPLE: "My example"
+    MY_EXAMPLE: "My example",
+    NOTE: "Note"
   };
 
   journalEntries.innerHTML = [...grouped.values()].map((group) => {
@@ -1128,20 +1210,23 @@ function renderJournalEntries(entries) {
     const entryCards = group.entries.map((entry) => `
       <div class="journal-entry-card">
         <span class="journal-entry-type">${escapeHtml(fieldLabels[entry.entryType] || entry.entryType)}</span>
-        <p class="journal-entry-content">${escapeHtml(entry.content)}</p>
+        <p class="journal-entry-content">${escapeHtml(
+          entry.sourceType === "note" ? excerptText(entry.content, 200) : entry.content
+        )}</p>
       </div>
     `).join("");
 
     return `
-      <article class="journal-lesson-group"${backgroundStyle}>
-        <button class="journal-lesson-header" type="button" data-lesson-id="${escapeHtml(group.lessonId)}">
+      <article class="journal-lesson-group"${backgroundStyle} data-entry-kind="${escapeHtml(group.sourceType)}">
+        <button class="journal-lesson-header" type="button" ${group.sourceType === "note" ? `data-note-id="${escapeHtml(group.noteId)}"` : `data-lesson-id="${escapeHtml(group.lessonId)}"`}>
           <div class="journal-lesson-poster">${poster}</div>
           <div>
+            <span class="entry-kind-badge entry-kind-${escapeHtml(group.sourceType)}">${group.sourceType === "note" ? "Note" : "Video"}</span>
             <h3>${escapeHtml(group.lessonTitle)}</h3>
-            <p>${escapeHtml(readingStatusLabel(readingStatus(group)))} · Updated ${escapeHtml(formatJournalDate(group.updatedAt))}</p>
+            <p>${group.sourceType === "note" ? `Personal note · ${group.isDone ? "Completed" : "Incomplete"}` : escapeHtml(readingStatusLabel(readingStatus(group)))} · Updated ${escapeHtml(formatJournalDate(group.updatedAt))}</p>
             ${tagChipsMarkup(group.tags, { limit: 4 })}
           </div>
-          <span class="journal-entry-count">Open lesson →</span>
+          <span class="journal-entry-count">Open ${group.sourceType === "note" ? "note" : "lesson"} →</span>
         </button>
         <div class="journal-entry-list">${entryCards}</div>
       </article>
@@ -1151,6 +1236,11 @@ function renderJournalEntries(entries) {
   for (const header of journalEntries.querySelectorAll("[data-lesson-id]")) {
     header.addEventListener("click", () => {
       void openLesson(header.dataset.lessonId, "journal");
+    });
+  }
+  for (const header of journalEntries.querySelectorAll("[data-note-id]")) {
+    header.addEventListener("click", () => {
+      void openNoteDetail(header.dataset.noteId, { readOnly: true });
     });
   }
 }
@@ -1195,14 +1285,15 @@ function renderMostViewedLessons(overview) {
 function renderLibraryTags(tags) {
   if (!libraryTagList) return;
   availableTags = tags;
-  if (currentLibraryTag && !tags.some((tag) => tag.slug === currentLibraryTag)) {
+  const libraryTags = tags.filter((tag) => Number(tag.lessonCount || 0) > 0);
+  if (currentLibraryTag && !libraryTags.some((tag) => tag.slug === currentLibraryTag)) {
     currentLibraryTag = "";
     updateUiSettings({ library: { tag: "" } });
   }
   libraryTagList.classList.toggle("is-expanded", libraryTagsExpanded);
   libraryTagList.innerHTML = `
     <button class="library-tag${currentLibraryTag ? "" : " is-active"}" type="button" data-library-tag="">All topics</button>
-    ${tags.map((tag) => `
+    ${libraryTags.map((tag) => `
       <button class="library-tag${currentLibraryTag === tag.slug ? " is-active" : ""}" type="button" data-library-tag="${escapeHtml(tag.slug)}">
         <span>#${escapeHtml(tag.name)}</span><small>${tag.lessonCount}</small>
       </button>
@@ -1221,7 +1312,7 @@ function renderLibraryTags(tags) {
     if (!libraryTagsMore) return;
     const overflows = libraryTagList.scrollHeight > libraryTagList.clientHeight + 2;
     libraryTagsMore.hidden = !libraryTagsExpanded && !overflows;
-    if (libraryTagsExpanded && tags.length > 5) libraryTagsMore.hidden = false;
+    if (libraryTagsExpanded && libraryTags.length > 5) libraryTagsMore.hidden = false;
     libraryTagsMore.textContent = libraryTagsExpanded ? "Show less" : "See more";
   });
 }
@@ -1268,9 +1359,489 @@ async function refreshLibrary() {
   }
 }
 
+function renderNoteTags(tags) {
+  if (!noteTagList) return;
+  const noteTags = tags.filter((tag) => Number(tag.noteCount || 0) > 0);
+  if (currentNoteTag && !noteTags.some((tag) => tag.slug === currentNoteTag)) {
+    currentNoteTag = "";
+    updateUiSettings({ notes: { tag: "" } });
+  }
+  noteTagList.innerHTML = `
+    <button class="library-tag${currentNoteTag ? "" : " is-active"}" type="button" data-note-tag="">All topics</button>
+    ${noteTags.map((tag) => `
+      <button class="library-tag${currentNoteTag === tag.slug ? " is-active" : ""}" type="button" data-note-tag="${escapeHtml(tag.slug)}">
+        <span>#${escapeHtml(tag.name)}</span><small>${tag.noteCount}</small>
+      </button>
+    `).join("")}
+  `;
+  for (const button of noteTagList.querySelectorAll("[data-note-tag]")) {
+    button.addEventListener("click", async () => {
+      currentNoteTag = button.dataset.noteTag || "";
+      updateUiSettings({ notes: { tag: currentNoteTag } });
+      await refreshNotes();
+    });
+  }
+}
+
+function noteCardMarkup(note) {
+  const poster = '<div class="lesson-card-poster-placeholder note-poster-placeholder">N</div>';
+  return `
+    <article class="lesson-card note-card${note.isDone ? " is-done" : ""}" data-note-id="${escapeHtml(note.id)}">
+      <button class="lesson-card-delete" type="button" title="Delete note" data-note-delete>×</button>
+      <button
+        class="lesson-card-favorite${note.isFavorite ? " is-active" : ""}"
+        type="button"
+        title="${note.isFavorite ? "Remove favorite" : "Add favorite"}"
+        aria-label="${note.isFavorite ? "Remove favorite" : "Add favorite"}"
+        aria-pressed="${note.isFavorite ? "true" : "false"}"
+        data-note-favorite-toggle
+      >${libraryIconSvg("heart")}</button>
+      <button class="lesson-card-open note-card-open" type="button" aria-label="Open ${escapeHtml(note.title)}">
+        <div class="lesson-card-poster">${poster}</div>
+        <div class="lesson-card-body">
+          <div class="note-card-meta">
+            <span class="entry-kind-badge ${note.isDone ? "note-status-done" : "note-status-pending"}">${note.isDone ? "Completed" : "Incomplete"}</span>
+            <span>${escapeHtml(formatJournalDate(note.updatedAt))}</span>
+          </div>
+          <div class="lesson-card-title-wrap note-card-title-wrap">
+            <h3>${escapeHtml(note.title)}</h3>
+            ${tagChipsMarkup(note.tags, { limit: 4 })}
+          </div>
+          <p>${escapeHtml(note.content)}</p>
+          <div class="lesson-card-footer">
+            <span>${note.isDone ? "Completed" : "Incomplete"}</span>
+            <span>Updated ${escapeHtml(formatJournalDate(note.updatedAt))}</span>
+          </div>
+        </div>
+      </button>
+    </article>
+  `;
+}
+
+async function refreshNotes() {
+  if (!noteList || !notesEnabled) return;
+  noteList.innerHTML = '<div class="empty-card"><p>Searching your notes…</p></div>';
+  try {
+    const [notes, tags] = await Promise.all([
+      listNotes({
+        q: noteSearch?.value || "",
+        tag: currentNoteTag,
+        favorite: currentNoteFavorite,
+        status: currentNoteStatus,
+        limit: 200
+      }),
+      listTags()
+    ]);
+    availableTags = tags;
+    renderNoteTags(tags);
+    if (noteResultCount) noteResultCount.textContent = `${notes.length} note${notes.length === 1 ? "" : "s"}`;
+    if (!notes.length) {
+      noteList.innerHTML = `
+        <div class="empty-card">
+          <span class="empty-icon">◎</span>
+          <h3>No notes found</h3>
+          <p>Add your first idea or task, or try another search, tag, or completion filter.</p>
+        </div>
+      `;
+      return;
+    }
+    noteList.innerHTML = notes.map(noteCardMarkup).join("");
+    for (const card of noteList.querySelectorAll("[data-note-id]")) {
+      card.querySelector(".note-card-open")?.addEventListener("click", () => {
+        void openNoteDetail(card.dataset.noteId);
+      });
+      card.querySelector("[data-note-favorite-toggle]")?.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        const button = event.currentTarget;
+        button.disabled = true;
+        try {
+          const note = await getNoteDetail(card.dataset.noteId);
+          await updateNoteDetails(card.dataset.noteId, { isFavorite: !note.isFavorite });
+          await refreshNotes();
+        } catch (error) {
+          window.alert(error.message);
+          button.disabled = false;
+        }
+      });
+      card.querySelector("[data-note-delete]")?.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        const title = card.querySelector("h3")?.textContent || "this note";
+        if (!window.confirm(`Delete "${title}"?`)) return;
+        try {
+          await deleteNote(card.dataset.noteId);
+          await refreshNotes();
+        } catch (error) {
+          window.alert(error.message);
+        }
+      });
+    }
+  } catch (error) {
+    noteList.innerHTML = `
+      <div class="empty-card">
+        <h3>Notes could not be loaded</h3>
+        <p>${escapeHtml(error.message)}</p>
+      </div>
+    `;
+  }
+}
+
+function noteTagChoicesMarkup(selectedTags = []) {
+  const selected = new Set(selectedTags.map((tag) => tag.id));
+  if (!availableTags.length) return '<p class="muted-copy">Create tags in Settings first.</p>';
+  return availableTags.map((tag) => `
+    <label class="note-tag-choice">
+      <input type="checkbox" name="tags" value="${escapeHtml(tag.name)}" ${selected.has(tag.id) ? "checked" : ""} />
+      <span>#${escapeHtml(tag.name)}</span>
+    </label>
+  `).join("");
+}
+
+async function openNoteDetail(noteId, { readOnly = false } = {}) {
+  if (!noteDetailDialog || !noteDetailRoot) return;
+  noteDetailRoot.innerHTML = '<div class="empty-card"><p>Loading note…</p></div>';
+  if (!noteDetailDialog.open) noteDetailDialog.showModal();
+  try {
+    let [note, tags] = await Promise.all([
+      getNoteDetail(noteId),
+      readOnly ? Promise.resolve([]) : listTags()
+    ]);
+    if (!readOnly) availableTags = tags;
+    noteDetailRoot.innerHTML = `
+      <form class="note-detail-form" data-note-detail-form>
+        <div class="dialog-heading">
+          <div>
+            <span class="entry-kind-badge entry-kind-note">Note</span>
+            <h2>${escapeHtml(note.title)}</h2>
+            <p class="muted-copy" data-note-detail-updated>${note.isDone ? "Completed" : "Incomplete"} · Updated ${escapeHtml(formatJournalDate(note.updatedAt))}</p>
+          </div>
+          <div class="note-detail-header-actions">
+            <button
+              class="lesson-icon-action favorite-action${note.isFavorite ? " is-active" : ""}"
+              type="button"
+              data-note-detail-favorite
+              aria-pressed="${note.isFavorite ? "true" : "false"}"
+              aria-label="${note.isFavorite ? "Remove favorite" : "Add favorite"}"
+              title="${note.isFavorite ? "Remove favorite" : "Add favorite"}"
+            >${libraryIconSvg("heart")}</button>
+            <button
+              class="lesson-icon-action mastered-action${note.isDone ? " is-active" : ""}"
+              type="button"
+              data-note-detail-done
+              aria-pressed="${note.isDone ? "true" : "false"}"
+              aria-label="${note.isDone ? "Mark incomplete" : "Mark completed"}"
+              title="${note.isDone ? "Mark incomplete" : "Mark completed"}"
+            >${libraryIconSvg("check")}</button>
+            <button class="icon-button" type="button" data-close-note-detail aria-label="Close">×</button>
+          </div>
+        </div>
+        ${readOnly ? `
+          <section class="note-detail-view" aria-label="Note content">
+            <div>
+              <p class="eyebrow">Content</p>
+              <p class="note-detail-view-content">${escapeHtml(note.content)}</p>
+            </div>
+            <div>
+              <p class="eyebrow">Tags</p>
+              ${tagChipsMarkup(note.tags, { limit: note.tags.length || 1 }) || '<p class="muted-copy">No tags</p>'}
+            </div>
+          </section>
+          <div class="dialog-actions">
+            <button class="secondary-action" type="button" data-close-note-detail>Close</button>
+          </div>
+        ` : `
+          <label>
+            <span>Content</span>
+            <textarea name="content" rows="10" required>${escapeHtml(note.content)}</textarea>
+          </label>
+          <fieldset class="note-tags-fieldset">
+            <legend>Tags</legend>
+            <div class="note-tag-choices">${noteTagChoicesMarkup(note.tags)}</div>
+          </fieldset>
+          <p class="form-error" data-note-detail-error hidden></p>
+          <div class="dialog-actions">
+            <button class="secondary-action" type="button" data-close-note-detail>Cancel</button>
+            <button class="primary-action" type="submit">Save update</button>
+          </div>
+        `}
+      </form>
+    `;
+    for (const button of noteDetailRoot.querySelectorAll("[data-close-note-detail]")) {
+      button.addEventListener("click", () => noteDetailDialog.close());
+    }
+    const syncNoteDetailState = () => {
+      const favoriteButton = noteDetailRoot.querySelector("[data-note-detail-favorite]");
+      const doneButton = noteDetailRoot.querySelector("[data-note-detail-done]");
+      const updatedLabel = noteDetailRoot.querySelector("[data-note-detail-updated]");
+      if (favoriteButton) {
+        favoriteButton.classList.toggle("is-active", note.isFavorite);
+        favoriteButton.setAttribute("aria-pressed", String(note.isFavorite));
+        favoriteButton.setAttribute("aria-label", note.isFavorite ? "Remove favorite" : "Add favorite");
+        favoriteButton.title = note.isFavorite ? "Remove favorite" : "Add favorite";
+      }
+      if (doneButton) {
+        doneButton.classList.toggle("is-active", note.isDone);
+        doneButton.setAttribute("aria-pressed", String(note.isDone));
+        doneButton.setAttribute("aria-label", note.isDone ? "Mark incomplete" : "Mark completed");
+        doneButton.title = note.isDone ? "Mark incomplete" : "Mark completed";
+      }
+      if (updatedLabel) {
+        updatedLabel.textContent = `${note.isDone ? "Completed" : "Incomplete"} · Updated ${formatJournalDate(note.updatedAt)}`;
+      }
+    };
+    const refreshNoteSurface = async () => {
+      if (currentPage === "notes") await refreshNotes();
+      if (currentPage === "journal") await refreshJournal();
+    };
+    noteDetailRoot.querySelector("[data-note-detail-favorite]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        note = await updateNoteDetails(noteId, { isFavorite: !note.isFavorite });
+        syncNoteDetailState();
+        await refreshNoteSurface();
+      } catch (error) {
+        window.alert(error.message);
+      } finally {
+        button.disabled = false;
+      }
+    });
+    noteDetailRoot.querySelector("[data-note-detail-done]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        note = await updateNoteDetails(noteId, { isDone: !note.isDone });
+        syncNoteDetailState();
+        await refreshNoteSurface();
+      } catch (error) {
+        window.alert(error.message);
+      } finally {
+        button.disabled = false;
+      }
+    });
+    if (!readOnly) noteDetailRoot.querySelector("[data-note-detail-form]")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const submit = form.querySelector("button[type='submit']");
+      const errorBox = form.querySelector("[data-note-detail-error]");
+      submit.disabled = true;
+      submit.textContent = "Saving…";
+      errorBox.hidden = true;
+      try {
+        await updateNoteDetails(noteId, {
+          content: form.elements.content.value,
+          tags: [...form.querySelectorAll("input[name='tags']:checked")].map((input) => input.value)
+        });
+        noteDetailDialog.close();
+        if (currentPage === "notes") await refreshNotes();
+        if (currentPage === "journal") await refreshJournal();
+      } catch (error) {
+        errorBox.textContent = error.message;
+        errorBox.hidden = false;
+      } finally {
+        submit.disabled = false;
+        submit.textContent = "Save update";
+      }
+    });
+  } catch (error) {
+    noteDetailRoot.innerHTML = `
+      <div class="empty-card">
+        <h3>Note could not be opened</h3>
+        <p>${escapeHtml(error.message)}</p>
+      </div>
+    `;
+  }
+}
+
+async function refreshSettingsTags() {
+  if (!settingsTagList) return;
+  settingsTagList.innerHTML = '<p class="muted-copy">Loading tags…</p>';
+  try {
+    availableTags = await listTags();
+    settingsTagList.innerHTML = availableTags.length
+      ? availableTags.map((tag) => `
+          <form class="settings-tag-item" data-settings-tag="${escapeHtml(tag.id)}">
+            <input name="name" value="${escapeHtml(tag.name)}" maxlength="40" aria-label="Tag name" />
+            <span>${tag.lessonCount} video · ${tag.noteCount || 0} note</span>
+            <button class="secondary-action" type="submit">Save</button>
+            <button class="tag-delete-action" type="button" data-delete-tag aria-label="Delete ${escapeHtml(tag.name)}">×</button>
+          </form>
+        `).join("")
+      : '<p class="muted-copy">No tags yet.</p>';
+    for (const row of settingsTagList.querySelectorAll("[data-settings-tag]")) {
+      row.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          await renameTag(row.dataset.settingsTag, row.elements.name.value);
+          await refreshSettingsTags();
+        } catch (error) {
+          setSettingsTagError(error.message);
+        }
+      });
+      row.querySelector("[data-delete-tag]")?.addEventListener("click", async () => {
+        const name = row.elements.name.value;
+        if (!window.confirm(`Delete tag "${name}" from every video and note?`)) return;
+        try {
+          await deleteTag(row.dataset.settingsTag);
+          await refreshSettingsTags();
+        } catch (error) {
+          setSettingsTagError(error.message);
+        }
+      });
+    }
+  } catch (error) {
+    settingsTagList.innerHTML = `<p class="form-error">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+function setSettingsTagError(message = "") {
+  if (!settingsTagError) return;
+  settingsTagError.textContent = message;
+  settingsTagError.hidden = !message;
+}
+
+async function openNoteCreateDialog() {
+  if (!noteCreateDialog || !noteCreateForm || !noteCreateTagChoices) return;
+  noteCreateForm.reset();
+  if (noteCreateError) {
+    noteCreateError.textContent = "";
+    noteCreateError.hidden = true;
+  }
+  noteCreateTagChoices.innerHTML = '<p class="muted-copy">Loading tags…</p>';
+  if (!noteCreateDialog.open) noteCreateDialog.showModal();
+  try {
+    availableTags = await listTags();
+    noteCreateTagChoices.innerHTML = noteTagChoicesMarkup([]);
+  } catch (error) {
+    noteCreateTagChoices.innerHTML = `<p class="form-error">${escapeHtml(error.message)}</p>`;
+  }
+  noteCreateForm.elements.title?.focus();
+}
+
 for (const link of navLinks) {
   link.addEventListener("click", () => void showPage(link.dataset.page));
 }
+
+document.querySelector("[data-open-settings]")?.addEventListener("click", () => {
+  setSettingsTagError("");
+  syncNoteFeatureVisibility();
+  if (!settingsDialog?.open) settingsDialog?.showModal();
+  void refreshSettingsTags();
+});
+
+document.querySelector("[data-open-note-create]")?.addEventListener("click", () => {
+  void openNoteCreateDialog();
+});
+
+for (const button of document.querySelectorAll("[data-close-note-create]")) {
+  button.addEventListener("click", () => noteCreateDialog?.close());
+}
+
+noteCreateForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const submit = noteCreateForm.querySelector("button[type='submit']");
+  if (noteCreateError) noteCreateError.hidden = true;
+  submit.disabled = true;
+  submit.textContent = "Adding…";
+  try {
+    await createNote({
+      title: noteCreateForm.elements.title.value,
+      content: noteCreateForm.elements.content.value,
+      tags: [...noteCreateForm.querySelectorAll("input[name='tags']:checked")].map((input) => input.value)
+    });
+    noteCreateDialog?.close();
+    await refreshNotes();
+  } catch (error) {
+    if (noteCreateError) {
+      noteCreateError.textContent = error.message;
+      noteCreateError.hidden = false;
+    }
+  } finally {
+    submit.disabled = false;
+    submit.textContent = "Add note";
+  }
+});
+
+for (const button of document.querySelectorAll("[data-close-settings]")) {
+  button.addEventListener("click", () => settingsDialog?.close());
+}
+
+settingsNoteEnabled?.addEventListener("change", async () => {
+  notesEnabled = settingsNoteEnabled.checked;
+  updateUiSettings({ features: { notes: notesEnabled } });
+  syncNoteFeatureVisibility();
+  syncJournalFilters();
+  if (!notesEnabled && currentPage === "notes") {
+    settingsDialog?.close();
+    await showPage("journal");
+  } else if (currentPage === "journal") {
+    renderJournalEntries(filteredJournalEntries());
+  }
+});
+
+settingsTagForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const input = settingsTagForm.elements.tagName;
+  const submit = settingsTagForm.querySelector("button[type='submit']");
+  setSettingsTagError("");
+  submit.disabled = true;
+  try {
+    await createTag(input.value);
+    settingsTagForm.reset();
+    await refreshSettingsTags();
+  } catch (error) {
+    setSettingsTagError(error.message);
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+noteSearch?.addEventListener("input", () => {
+  updateUiSettings({ notes: { search: noteSearch.value } });
+  if (noteSearchTimer) window.clearTimeout(noteSearchTimer);
+  noteSearchTimer = window.setTimeout(() => void refreshNotes(), 250);
+});
+
+for (const filter of noteStatusFilters) {
+  filter.addEventListener("click", async () => {
+    currentNoteStatus = filter.dataset.noteStatus || "";
+    updateUiSettings({ notes: { status: currentNoteStatus } });
+    syncNoteFilters();
+    await refreshNotes();
+  });
+}
+
+noteFavoriteFilter?.addEventListener("click", async () => {
+  currentNoteFavorite = !currentNoteFavorite;
+  updateUiSettings({ notes: { favorite: currentNoteFavorite } });
+  syncNoteFilters();
+  await refreshNotes();
+});
+
+for (const filter of journalTypeFilters) {
+  filter.addEventListener("click", () => {
+    currentJournalType = filter.dataset.journalType || "all";
+    if (currentJournalType === "note") currentJournalStatus = "";
+    updateUiSettings({ journal: { type: currentJournalType, status: currentJournalStatus } });
+    syncJournalFilters();
+    renderJournalEntries(filteredJournalEntries());
+  });
+}
+
+for (const popup of document.querySelectorAll("dialog")) {
+  popup.addEventListener("click", (event) => {
+    if (event.target === popup && popup.open) popup.close();
+  });
+}
+
+noteDetailDialog?.addEventListener("close", () => {
+  if (noteDetailRoot) noteDetailRoot.innerHTML = "";
+});
+
+settingsDialog?.addEventListener("close", () => {
+  if (currentPage === "library") void refreshLibrary();
+  if (currentPage === "notes") void refreshNotes();
+  if (currentPage === "journal") void refreshJournal();
+});
 
 for (const button of document.querySelectorAll("[data-open-capture]")) {
   button.addEventListener("click", () => {
@@ -1350,12 +1921,14 @@ journalSearch?.addEventListener("input", () => {
 for (const filter of journalStatusFilters) {
   filter.addEventListener("click", () => {
     currentJournalStatus = filter.dataset.journalStatus || "";
+    if (currentJournalType === "note") currentJournalType = "video";
     currentJournalFavorite = false;
     syncJournalFilters();
     updateUiSettings({
       journal: {
         status: currentJournalStatus,
-        favorite: false
+        favorite: false,
+        type: currentJournalType
       }
     });
     renderJournalEntries(filteredJournalEntries());
@@ -1903,7 +2476,7 @@ for (const button of document.querySelectorAll("[data-close-metadata]")) {
 }
 
 metadataDialog?.addEventListener("click", (event) => {
-  if (event.target === metadataDialog) {
+  if (event.target === metadataDialog && metadataDialog.open) {
     metadataDialog.close();
     metadataEditingLesson = null;
   }
