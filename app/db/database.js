@@ -24,6 +24,22 @@ function initializeDatabaseConnection(databasePath) {
   connection.pragma("journal_mode = WAL");
   connection.exec(schemaSql);
 
+  const noteTagForeignKeys = connection.prepare("PRAGMA foreign_key_list(note_tags)").all();
+  if (noteTagForeignKeys.some((foreignKey) => foreignKey.table === "lesson_notes")) {
+    connection.exec(`
+      DROP TABLE note_tags;
+      CREATE TABLE note_tags (
+        note_id TEXT NOT NULL,
+        tag_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (note_id, tag_id),
+        FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE,
+        FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE
+      );
+      CREATE INDEX idx_note_tags_tag ON note_tags(tag_id, note_id);
+    `);
+  }
+
   try {
     connection.exec(
       "ALTER TABLE share_registry ADD COLUMN last_exported_at TEXT",
@@ -51,6 +67,14 @@ function initializeDatabaseConnection(databasePath) {
   try {
     connection.exec(
       "ALTER TABLE lesson_notes ADD COLUMN title TEXT NOT NULL DEFAULT ''",
+    );
+  } catch {
+    // column already exists — safe to ignore
+  }
+
+  try {
+    connection.exec(
+      "ALTER TABLE notes ADD COLUMN is_done INTEGER NOT NULL DEFAULT 0",
     );
   } catch {
     // column already exists — safe to ignore

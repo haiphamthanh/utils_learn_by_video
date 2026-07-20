@@ -11,6 +11,7 @@ import {
   replaceLessonTags,
   tagSlug
 } from "./tag.service.js";
+import { listNotes } from "./note.service.js";
 
 const JOURNAL_FIELDS = {
   whyISavedThis: "WHY_I_SAVED",
@@ -812,6 +813,7 @@ export function listJournalEntries({ q = "" } = {}) {
     inboxItemId: row.inboxItemId,
     field: journalReverse[row.entryType] || row.entryType,
     entryType: row.entryType,
+    sourceType: "video",
     content: row.content,
     lessonTitle: row.lessonTitle,
     lessonSummaryVi: row.lessonSummaryVi,
@@ -824,6 +826,28 @@ export function listJournalEntries({ q = "" } = {}) {
     },
     tags: listLessonTags(row.lessonId, db)
   }));
+
+  const noteEntries = listNotes({ limit: 200 }).map((note) => ({
+      id: note.id,
+      noteId: note.id,
+      lessonId: null,
+      inboxItemId: null,
+      field: "note",
+      entryType: "NOTE",
+      sourceType: "note",
+      content: note.content,
+      lessonTitle: note.title,
+      lessonSummaryVi: "",
+      updatedAt: note.updatedAt,
+      learningStatus: "",
+      isFavorite: Boolean(note.isFavorite),
+      isDone: Boolean(note.isDone),
+      viewCount: 0,
+      media: { posterUrl: null },
+      tags: note.tags
+    }));
+  entries.push(...noteEntries);
+  entries.sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
 
   if (normalizedQuery) {
     const needle = normalizedQuery.toLocaleLowerCase();

@@ -15,6 +15,7 @@ import {
   updateLessonMetadata,
   updateLessonTags
 } from "../services/learning.service.js";
+import { createTag, deleteTag, renameTag } from "../services/tag.service.js";
 
 function sendMedia(req, res, media) {
   const range = req.headers.range;
@@ -72,6 +73,30 @@ export function createLessonsRouter() {
   router.get("/tags", (_req, res, next) => {
     try {
       res.json({ data: listTags(), error: null });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/tags", (req, res, next) => {
+    try {
+      res.status(201).json({ data: createTag(req.body?.name), error: null });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.patch("/tags/:tagId", (req, res, next) => {
+    try {
+      res.json({ data: renameTag(req.params.tagId, req.body?.name), error: null });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.delete("/tags/:tagId", (req, res, next) => {
+    try {
+      res.json({ data: deleteTag(req.params.tagId), error: null });
     } catch (error) {
       next(error);
     }

@@ -27,9 +27,16 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="8" rx="1"/><rect x="14" y="3" width="7" height="8" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
           <span>Library</span>
         </button>
+        <button class="nav-link" data-page="notes" data-notes-navigation hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>
+          <span>Note</span>
+        </button>
         <button class="nav-link" data-page="share">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="2.5"/><circle cx="18" cy="19" r="2.5"/><line x1="15.6" y1="6.5" x2="9" y2="11"/><line x1="9" y1="13" x2="15.6" y2="17.5"/></svg>
           <span>Share</span>
+        </button>
+        <button class="nav-link nav-settings" type="button" data-open-settings aria-label="Settings" title="Settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1z"/></svg>
         </button>
       </nav>
     </header>
@@ -94,6 +101,11 @@
                 <button class="filter-chip" type="button" data-journal-status="MASTERED">Read</button>
                 <button class="filter-chip journal-favorite-filter" type="button" data-journal-favorite="true">Favorite</button>
               </div>
+              <div class="journal-type-filters" data-journal-type-filters role="group" aria-label="Filter by entry type" hidden>
+                <button class="filter-chip is-active" type="button" data-journal-type="all">All</button>
+                <button class="filter-chip" type="button" data-journal-type="video">Video</button>
+                <button class="filter-chip" type="button" data-journal-type="note">Note</button>
+              </div>
               <label class="journal-tag-select">
                 <span class="sr-only">Filter by tag</span>
                 <select id="journal-tag-filter" aria-label="Filter journal by tag">
@@ -136,6 +148,39 @@
           </div>
         </div>
         <div id="library-lessons" class="lesson-card-grid" aria-live="polite"></div>
+      </section>
+
+      <section id="notes-page" class="page" hidden>
+        <div class="section-heading library-heading">
+          <h1>Note</h1>
+          <div class="library-heading-copy">
+            <p class="eyebrow">Ideas worth keeping</p>
+            <p class="heading-copy">Keep ideas, daily tasks, and thoughts in one searchable place.</p>
+          </div>
+          <button class="primary-action library-add-source" type="button" data-open-note-create aria-label="Add note" title="Add note">+</button>
+        </div>
+        <section class="library-tags" aria-labelledby="note-tags-title">
+          <div class="library-tags-heading">
+            <p class="eyebrow" id="note-tags-title">Topics</p>
+          </div>
+          <div class="library-tag-list is-expanded" id="note-tag-list" aria-live="polite"></div>
+        </section>
+        <div class="library-toolbar note-toolbar">
+          <label class="library-search">
+            <span class="sr-only">Search notes</span>
+            <input id="note-search" type="search" placeholder="Search title, content or tag…" />
+          </label>
+          <div class="note-toolbar-actions">
+            <div class="library-filter-chips" role="group" aria-label="Filter notes by completion">
+              <button class="filter-chip is-active" type="button" data-note-status="">All</button>
+              <button class="filter-chip" type="button" data-note-status="done">Completed</button>
+              <button class="filter-chip" type="button" data-note-status="pending">Incomplete</button>
+              <button class="filter-chip favorite-filter-chip" type="button" data-note-favorite aria-label="Favorite notes">♡</button>
+            </div>
+            <p id="note-result-count" class="muted-copy"></p>
+          </div>
+        </div>
+        <div id="note-list" class="lesson-card-grid note-card-grid" aria-live="polite"></div>
       </section>
 
       <section id="share-page" class="page" hidden>
@@ -238,6 +283,74 @@
       <div class="lesson-info-shell">
         <div id="lesson-info-root"></div>
       </div>
+    </dialog>
+
+    <dialog id="note-detail-dialog" class="lesson-info-dialog note-detail-dialog">
+      <div class="lesson-info-shell">
+        <div id="note-detail-root"></div>
+      </div>
+    </dialog>
+
+    <dialog id="note-create-dialog" class="capture-dialog note-create-dialog">
+      <form id="note-create-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">New idea</p>
+            <h2>Add Note</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-note-create aria-label="Close">×</button>
+        </div>
+        <label>
+          <span>Title</span>
+          <input name="title" type="text" maxlength="180" placeholder="Idea or task title" required />
+        </label>
+        <label>
+          <span>Content</span>
+          <textarea name="content" rows="8" placeholder="Write down the idea, task, or thought…" required></textarea>
+        </label>
+        <fieldset class="note-tags-fieldset">
+          <legend>Tags</legend>
+          <div id="note-create-tag-choices" class="note-tag-choices"></div>
+        </fieldset>
+        <p id="note-create-error" class="form-error" hidden></p>
+        <div class="dialog-actions">
+          <button class="secondary-action" type="button" data-close-note-create>Cancel</button>
+          <button class="primary-action" type="submit">Add note</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="settings-dialog" class="capture-dialog settings-dialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">Preferences</p>
+          <h2>Settings</h2>
+        </div>
+        <button class="icon-button" type="button" data-close-settings aria-label="Close">×</button>
+      </div>
+      <section class="settings-section">
+        <div>
+          <strong>Note feature</strong>
+          <p class="muted-copy">Show the independent Note page and include those notes in Journal.</p>
+        </div>
+        <label class="settings-switch">
+          <input id="settings-note-enabled" type="checkbox" />
+          <span aria-hidden="true"></span>
+          <span class="sr-only">Show Note feature</span>
+        </label>
+      </section>
+      <section class="settings-tags-section">
+        <div>
+          <p class="eyebrow">Central management</p>
+          <h3>Tags</h3>
+        </div>
+        <form id="settings-tag-form" class="settings-tag-form">
+          <input name="tagName" type="text" maxlength="40" placeholder="Add a new tag" required />
+          <button class="primary-action" type="submit">Add</button>
+        </form>
+        <p id="settings-tag-error" class="form-error" hidden></p>
+        <div id="settings-tag-list" class="settings-tag-list" aria-live="polite"></div>
+      </section>
     </dialog>
 
     <dialog id="stats-dialog" class="capture-dialog">

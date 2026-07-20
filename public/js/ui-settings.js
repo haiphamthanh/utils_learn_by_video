@@ -5,13 +5,18 @@ const defaultSettings = {
   scrollByPage: {
     journal: 0,
     library: 0,
+    notes: 0,
     share: 0
+  },
+  features: {
+    notes: false
   },
   journal: {
     search: "",
     status: "",
     favorite: false,
-    tag: ""
+    tag: "",
+    type: "all"
   },
   library: {
     search: "",
@@ -19,6 +24,12 @@ const defaultSettings = {
     favorite: false,
     tag: "",
     tagsExpanded: false
+  },
+  notes: {
+    search: "",
+    tag: "",
+    status: "",
+    favorite: false
   },
   lesson: null
 };

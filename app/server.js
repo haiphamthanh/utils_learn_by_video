@@ -6,6 +6,7 @@ import { config } from "./config.js";
 import { initializeDatabase } from "./db/database.js";
 import { createInboxRouter } from "./routes/inbox.routes.js";
 import { createLessonsRouter } from "./routes/lessons.routes.js";
+import { createNotesRouter } from "./routes/notes.routes.js";
 import { createHealthRouter } from "./routes/health.routes.js";
 import { createShareRouter } from "./routes/share.routes.js";
 import { recoverInterruptedAcquisitionJobs } from "./services/automation.service.js";
@@ -42,6 +43,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api/health", createHealthRouter());
 app.use("/api/inbox", createInboxRouter());
 app.use("/api/lessons", createLessonsRouter());
+app.use("/api/notes", createNotesRouter());
 app.use("/api/share", createShareRouter());
 app.get("/api/journal/overview", (req, res, next) => {
   try {
