@@ -24,11 +24,53 @@ function makeId(prefix) {
   return `${prefix}_${crypto.randomUUID()}`;
 }
 
-function badRequest(code, message) {
+function requestError(code, message, status = 400) {
   const error = new Error(message);
-  error.status = 400;
+  error.status = status;
   error.code = code;
   return error;
+}
+
+function badRequest(code, message) {
+  return requestError(code, message);
+}
+
+export function inboxIdFromSourceUrl(sourceType, value) {
+  if (sourceType !== "facebook-reel") return null;
+
+  try {
+    const url = new URL(String(value || ""));
+    const host = url.hostname.replace(/^www\./, "").toLowerCase();
+    if (host !== "facebook.com" && !host.endsWith(".facebook.com")) return null;
+    return url.pathname.match(/\/reel\/(\d+)(?:\/|$)/i)?.[1] || null;
+  } catch {
+    return null;
+  }
+}
+
+export function assertInboxSourceAvailable(source = {}) {
+  const db = getDatabase();
+  const sourceType = String(source.type || "other-url");
+  const url = typeof source.url === "string" ? source.url.trim() : "";
+  const inboxId = inboxIdFromSourceUrl(sourceType, url);
+  const duplicate = (
+    (inboxId && db.prepare("SELECT id FROM inbox_items WHERE id = ?").get(inboxId)) ||
+    (url && db.prepare(`
+      SELECT i.id
+      FROM inbox_items i
+      JOIN sources s ON s.id = i.source_id
+      WHERE s.url = ?
+      LIMIT 1
+    `).get(url))
+  );
+
+  if (duplicate) {
+    throw requestError(
+      "SOURCE_ALREADY_SAVED",
+      "Video đã có rồi.",
+      409
+    );
+  }
 }
 
 function notFound(message = "Inbox item not found.") {
@@ -63,8 +105,11 @@ export function createInboxItem(payload = {}) {
   }
 
   const createdAt = nowIso();
-  const sourceId = makeId("source");
-  const inboxId = makeId("inbox");
+  const urlInboxId = inboxIdFromSourceUrl(sourceType, url);
+  const inboxId = urlInboxId || makeId("inbox");
+  const sourceId = urlInboxId ? `source_${urlInboxId}` : makeId("source");
+
+  assertInboxSourceAvailable({ type: sourceType, url });
 
   const transaction = db.transaction(() => {
     db.prepare(`

@@ -31,9 +31,8 @@ export function normalizeTagNames(values) {
   return [...unique.values()];
 }
 
-function tagId(slug) {
-  const hash = crypto.createHash("sha1").update(slug).digest("hex").slice(0, 20);
-  return `tag_${hash}`;
+function tagId() {
+  return `tag_${crypto.randomUUID()}`;
 }
 
 function ensureLegacyTopicTags(db) {
@@ -64,7 +63,7 @@ function ensureLegacyTopicTags(db) {
       const name = normalizeTagNames([row.topic])[0];
       const slug = tagSlug(name);
       if (!name || !slug) continue;
-      insertTag.run(tagId(slug), name, slug, timestamp, timestamp);
+      insertTag.run(tagId(), name, slug, timestamp, timestamp);
       const tag = findTag.get(slug);
       if (tag) insertLink.run(row.lessonId, tag.id, timestamp);
     }
@@ -110,7 +109,7 @@ export function replaceLessonTags(lessonId, values, db = getDatabase(), timestam
   const tags = [];
   for (const name of names) {
     const slug = tagSlug(name);
-    insertTag.run(tagId(slug), name, slug, timestamp, timestamp);
+    insertTag.run(tagId(), name, slug, timestamp, timestamp);
     const tag = findTag.get(slug);
     if (!tag) continue;
     insertLink.run(lessonId, tag.id, timestamp);
@@ -136,7 +135,7 @@ export function replaceNoteTags(noteId, values, db = getDatabase(), timestamp = 
   const tags = [];
   for (const name of names) {
     const slug = tagSlug(name);
-    insertTag.run(tagId(slug), name, slug, timestamp, timestamp);
+    insertTag.run(tagId(), name, slug, timestamp, timestamp);
     const tag = findTag.get(slug);
     if (!tag) continue;
     insertLink.run(noteId, tag.id, timestamp);
@@ -161,7 +160,7 @@ export function createTag(value, db = getDatabase()) {
     db.prepare(`
       INSERT INTO tags (id, name, slug, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?)
-    `).run(tagId(slug), name, slug, timestamp, timestamp);
+    `).run(tagId(), name, slug, timestamp, timestamp);
   } catch (error) {
     if (error.code === "SQLITE_CONSTRAINT_UNIQUE") {
       throw tagError("TAG_ALREADY_EXISTS", "A tag with this name already exists.", 409);

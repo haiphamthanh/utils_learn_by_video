@@ -2,26 +2,17 @@
   const ROOT_ID = "enjoy-journal-floating-save";
   let lastUrl = "";
   let refreshTimer = null;
+  let lastCapture = null;
 
   function readCapture() {
-    return window.EnjoyJournalCaptureProviders?.readCurrentCapture?.() || null;
+    const capture = window.EnjoyJournalCaptureProviders?.readCurrentCapture?.() || null;
+    if (capture) lastCapture = capture;
+    if (!/\/reel\//i.test(location.pathname)) lastCapture = null;
+    return capture || lastCapture;
   }
 
   function removeRoot() {
     document.getElementById(ROOT_ID)?.remove();
-  }
-
-  function findVideoRect() {
-    const video = document.querySelector("video");
-    if (!video) return null;
-    let el = video;
-    for (let i = 0; i < 8; i++) {
-      if (!el.parentElement) break;
-      el = el.parentElement;
-      const r = el.getBoundingClientRect();
-      if (r.width >= 280 && r.height >= 320) break;
-    }
-    return el.getBoundingClientRect();
   }
 
   function setStatus(root, text, kind) {
@@ -59,6 +50,15 @@
     popover.style.left = left + "px";
     popover.dataset.visible = "true";
     root.querySelector("[data-ej-note]")?.focus();
+
+    chrome.runtime.sendMessage({ type: "GET_SAVE_AVAILABILITY" }, (response) => {
+      if (chrome.runtime.lastError || !response?.ok) return;
+      setStatus(
+        root,
+        response.data?.available ? "" : "Đang có video được xử lý, xin chờ chốc lát.",
+        response.data?.available ? "" : "error"
+      );
+    });
   }
 
   function render() {
@@ -235,18 +235,11 @@
       }, true);
     }
 
-    const videoRect = findVideoRect();
     const btn = root.querySelector("[data-ej-btn]");
-    if (videoRect) {
-      btn.style.top = (videoRect.top + 12) + "px";
-      btn.style.left = (videoRect.right - 56) + "px";
-      btn.style.display = "flex";
-    } else {
-      btn.style.top = "12px";
-      btn.style.right = "12px";
-      btn.style.left = "auto";
-      btn.style.display = "flex";
-    }
+    btn.style.top = "72px";
+    btn.style.right = "20px";
+    btn.style.left = "auto";
+    btn.style.display = "flex";
   }
 
   async function save(root) {

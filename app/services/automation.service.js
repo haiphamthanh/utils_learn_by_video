@@ -232,6 +232,44 @@ export function startAutomaticPipeline(inboxItemId) {
   return { started: true, reason: null, item };
 }
 
+export function getActiveAutomaticPipeline() {
+  const db = getDatabase();
+  const activeItem = db.prepare(`
+    SELECT id, status
+    FROM inbox_items
+    WHERE status IN ('ACQUIRING_MEDIA', 'PROCESSING', 'TRANSCRIBING', 'LESSON_GENERATING')
+    ORDER BY updated_at ASC
+    LIMIT 1
+  `).get();
+
+  if (activeItem) return activeItem;
+
+  for (const inboxItemId of activeAutomaticPipelines) {
+    const item = db.prepare(`
+      SELECT id, status
+      FROM inbox_items
+      WHERE id = ?
+    `).get(inboxItemId);
+
+    if (item && !["LESSON_READY", "MEDIA_ACQUISITION_FAILED", "FAILED", "TRANSCRIPTION_FAILED", "LESSON_FAILED"].includes(item.status)) {
+      return item;
+    }
+  }
+
+  return null;
+}
+
+export function assertAutomaticPipelineAvailable() {
+  const activeItem = getActiveAutomaticPipeline();
+  if (!activeItem) return;
+
+  throw automationError(
+    "AUTOMATIC_PIPELINE_BUSY",
+    "Đang có video được xử lý, xin chờ chốc lát.",
+    409
+  );
+}
+
 export function recoverInterruptedAcquisitionJobs() {
   const db = getDatabase();
   const timestamp = nowIso();

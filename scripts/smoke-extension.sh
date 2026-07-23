@@ -101,10 +101,14 @@ grep -q 'localhost' extension/service-worker.js
 grep -q '127.0.0.1' extension/service-worker.js
 grep -q 'API_URL_NOT_LOCAL' extension/service-worker.js
 grep -q '"/api/inbox"' extension/service-worker.js
+grep -q '"GET_SAVE_AVAILABILITY"' extension/service-worker.js
+grep -q 'AUTOMATIC_PIPELINE_BUSY' app/services/automation.service.js
 
 echo "Checking Inbox deep link support..."
 grep -q 'URLSearchParams' public/js/app.js
 grep -q 'supportedPages' public/js/app.js
+grep -q '"inbox"' public/js/app.js
+grep -q 'id="inbox-page"' public/index.html
 
 echo "Checking explicit language selection..."
 grep -q 'id="source-language"' extension/popup.html

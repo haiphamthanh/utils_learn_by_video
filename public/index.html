@@ -27,6 +27,11 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="8" rx="1"/><rect x="14" y="3" width="7" height="8" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
           <span>Library</span>
         </button>
+        <button class="nav-link" data-page="inbox">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M4 14h5l2 3h2l2-3h5"/></svg>
+          <span>Inbox</span>
+          <span class="count-badge" id="inbox-count">0</span>
+        </button>
         <button class="nav-link" data-page="notes" data-notes-navigation hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>
           <span>Note</span>
@@ -116,6 +121,24 @@
             <div id="journal-entries" aria-live="polite"></div>
           </section>
         </div>
+      </section>
+
+      <section id="inbox-page" class="page" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Save once, analyze automatically</p>
+            <h1>Inbox</h1>
+            <p class="heading-copy">Saved videos appear here immediately while analysis is running.</p>
+          </div>
+          <button class="primary-action" data-open-capture>Add source</button>
+        </div>
+        <div class="filter-row">
+          <button class="filter-chip is-active" data-status-filter="all">All</button>
+          <button class="filter-chip" data-status-filter="active">In progress</button>
+          <button class="filter-chip" data-status-filter="ready">Ready</button>
+          <button class="filter-chip" data-status-filter="attention">Needs attention</button>
+        </div>
+        <div id="inbox-list" class="inbox-list" aria-live="polite"></div>
       </section>
 
       <section id="library-page" class="page" hidden>

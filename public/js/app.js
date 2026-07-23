@@ -1,7 +1,9 @@
 import {
   createInbox,
   deleteInbox,
+  generateLesson,
   getTranscript,
+  listInbox,
   listLessons,
   listTags,
   createTag,
@@ -13,6 +15,9 @@ import {
   getNoteDetail,
   updateNoteDetails,
   startAutomaticAnalysis,
+  processMedia,
+  transcribeMedia,
+  uploadMedia,
   updateTranscriptSegment,
   listShareRegistry,
   listShareExports,
@@ -37,6 +42,10 @@ const navLinks = [...document.querySelectorAll(".nav-link[data-page]")];
 const dialog = document.querySelector("#capture-dialog");
 const captureForm = document.querySelector("#capture-form");
 const captureError = document.querySelector("#capture-error");
+const inboxList = document.querySelector("#inbox-list");
+const inboxCount = document.querySelector("#inbox-count");
+const inboxTemplate = document.querySelector("#inbox-card-template");
+const statusFilters = [...document.querySelectorAll("[data-status-filter]")];
 const libraryLessons = document.querySelector("#library-lessons");
 const librarySearch = document.querySelector("#library-search");
 const libraryStatusFilters = [...document.querySelectorAll("[data-library-status]")];
@@ -110,7 +119,7 @@ const settingsTagError = document.querySelector("#settings-tag-error");
 
 let shareLessonData = [];
 let shareSelectedIds = new Set();
-const supportedPages = new Set(["journal", "library", "notes", "share"]);
+const supportedPages = new Set(["journal", "library", "inbox", "notes", "share"]);
 const supportedLearningStatuses = new Set(["", "NEW", "LEARNING", "MASTERED"]);
 const restoredUiSettings = getUiSettings();
 let notesEnabled = Boolean(restoredUiSettings.features?.notes);
@@ -142,6 +151,29 @@ let librarySearchTimer = null;
 let libraryLessonMap = new Map();
 let metadataEditingLesson = null;
 let noteSearchTimer = null;
+let currentStatusFilter = "all";
+let activeInboxPollTimer = null;
+
+const inboxStatusGroups = {
+  all: null,
+  active: new Set([
+    "WAITING_MEDIA",
+    "ACQUIRING_MEDIA",
+    "READY_TO_PROCESS",
+    "PROCESSING",
+    "MEDIA_READY",
+    "TRANSCRIBING",
+    "TRANSCRIPT_READY",
+    "LESSON_GENERATING"
+  ]),
+  ready: new Set(["LESSON_READY"]),
+  attention: new Set([
+    "MEDIA_ACQUISITION_FAILED",
+    "TRANSCRIPTION_FAILED",
+    "LESSON_FAILED",
+    "FAILED"
+  ])
+};
 
 if (journalSearch) journalSearch.value = restoredUiSettings.journal?.search || "";
 if (librarySearch) librarySearch.value = restoredUiSettings.library?.search || "";
@@ -285,6 +317,7 @@ async function showPage(pageName, { updateUrl = true, restoreScroll = true } = {
 
   if (pageName === "journal") await refreshJournal();
   if (pageName === "library") await refreshLibrary();
+  if (pageName === "inbox") await refreshInbox();
   if (pageName === "notes") await refreshNotes();
   if (pageName === "share") await refreshShare();
 
@@ -332,6 +365,246 @@ function escapeHtml(value) {
   const div = document.createElement("div");
   div.textContent = value ?? "";
   return div.innerHTML;
+}
+
+function sourceName(type) {
+  return {
+    "facebook-reel": "Facebook Reel",
+    "youtube-short": "YouTube Short",
+    "other-url": "Other source",
+    "local-file": "Local file",
+    "uploaded-file": "Uploaded file"
+  }[type] || type;
+}
+
+function inboxStatusName(status) {
+  return {
+    WAITING_MEDIA: "Waiting to start",
+    ACQUIRING_MEDIA: "Importing media",
+    MEDIA_ACQUISITION_FAILED: "Import failed",
+    READY_TO_PROCESS: "Ready to process",
+    PROCESSING: "Processing media",
+    MEDIA_READY: "Media ready",
+    TRANSCRIBING: "Transcribing",
+    TRANSCRIPT_READY: "Transcript ready",
+    TRANSCRIPTION_FAILED: "Transcription failed",
+    LESSON_GENERATING: "Generating lesson",
+    LESSON_READY: "Lesson ready",
+    LESSON_FAILED: "Lesson failed",
+    FAILED: "Media failed"
+  }[status] || status;
+}
+
+function inboxStageName(stage) {
+  return {
+    QUEUED: "Queued",
+    FETCH_SOURCE: "Opening source",
+    DOWNLOAD_MEDIA: "Downloading media",
+    FINALIZE_MEDIA: "Finalizing media",
+    REGISTER_MEDIA: "Registering media",
+    VALIDATE: "Validating media",
+    PREPARE_MEDIA: "Preparing media",
+    SAVE_ARTIFACTS: "Saving media",
+    STARTING: "Starting",
+    LOAD_MODEL: "Loading model",
+    TRANSCRIBE: "Transcribing",
+    VALIDATE_TRANSCRIPT: "Checking transcript",
+    SAVE_TRANSCRIPT: "Saving transcript",
+    PREPARE_PROMPT: "Preparing lesson",
+    GENERATE_WITH_AI: "Generating lesson",
+    GENERATE_MOCK: "Generating lesson",
+    VALIDATE_LESSON: "Checking lesson",
+    SAVE_LESSON: "Saving lesson",
+    COMPLETE: "Complete",
+    FAILED: "Failed"
+  }[stage] || stage || "Working";
+}
+
+function inboxDisplayTitle(item) {
+  if (item.sourceTitle) return item.sourceTitle;
+  try {
+    return new URL(item.sourceUrl).hostname.replace(/^www\./, "");
+  } catch {
+    return "Saved source";
+  }
+}
+
+function setInboxProgress(item, detail, label, progressBar) {
+  const activeStatuses = ["ACQUIRING_MEDIA", "PROCESSING", "TRANSCRIBING", "LESSON_GENERATING"];
+  if (!activeStatuses.includes(item.status)) return;
+
+  detail.hidden = false;
+  let progress = 0;
+  let stage = "QUEUED";
+  if (item.status === "ACQUIRING_MEDIA") {
+    progress = item.acquisitionProgress || 0;
+    stage = item.acquisitionStage;
+  } else if (item.status === "PROCESSING") {
+    progress = item.processingProgress || 0;
+    stage = item.processingStage;
+  } else if (item.status === "TRANSCRIBING") {
+    progress = item.transcriptionProgress || 0;
+    stage = item.transcriptionStage;
+  } else {
+    progress = item.lessonProgress || 0;
+    stage = item.lessonStage;
+  }
+
+  progress = Math.max(0, Math.min(100, progress));
+  progressBar.style.width = `${progress}%`;
+  label.textContent = `${inboxStageName(stage)} · ${progress}%`;
+}
+
+function syncInboxPolling(items) {
+  const hasActiveItem = items.some((item) =>
+    ["WAITING_MEDIA", "ACQUIRING_MEDIA", "PROCESSING", "TRANSCRIBING", "LESSON_GENERATING"].includes(item.status)
+  );
+
+  if (hasActiveItem && !activeInboxPollTimer) {
+    activeInboxPollTimer = window.setInterval(() => {
+      void refreshInbox({ quiet: true });
+    }, 1500);
+  } else if (!hasActiveItem && activeInboxPollTimer) {
+    window.clearInterval(activeInboxPollTimer);
+    activeInboxPollTimer = null;
+  }
+}
+
+async function refreshInbox({ quiet = false } = {}) {
+  if (!inboxList || !inboxTemplate) return;
+  if (!quiet) inboxList.innerHTML = '<div class="empty-card"><p>Loading Inbox…</p></div>';
+
+  try {
+    const allItems = await listInbox("");
+    if (inboxCount) inboxCount.textContent = String(allItems.length);
+    syncInboxPolling(allItems);
+
+    const selectedStatuses = inboxStatusGroups[currentStatusFilter];
+    const items = selectedStatuses
+      ? allItems.filter((item) => selectedStatuses.has(item.status))
+      : allItems;
+
+    if (!items.length) {
+      inboxList.innerHTML = `
+        <div class="empty-card">
+          <span class="empty-icon">◎</span>
+          <h3>Nothing here yet</h3>
+          <p>Save one source or change the current filter.</p>
+        </div>
+      `;
+      return;
+    }
+
+    inboxList.innerHTML = "";
+    for (const item of items) {
+      const fragment = inboxTemplate.content.cloneNode(true);
+      const card = fragment.querySelector(".inbox-card");
+      const active = ["WAITING_MEDIA", "ACQUIRING_MEDIA", "PROCESSING", "TRANSCRIBING", "LESSON_GENERATING"].includes(item.status);
+      const uploadAction = fragment.querySelector(".upload-action");
+      const mediaInput = fragment.querySelector(".media-input");
+      const uploadLabel = fragment.querySelector(".upload-label");
+      const autoAction = fragment.querySelector(".auto-action");
+      const processAction = fragment.querySelector(".process-action");
+      const transcribeAction = fragment.querySelector(".transcribe-action");
+      const generateAction = fragment.querySelector(".generate-lesson-action");
+      const openAction = fragment.querySelector(".open-lesson-action");
+      const deleteAction = fragment.querySelector(".delete-source-action");
+
+      card.dataset.id = item.id;
+      card.dataset.status = item.status;
+      fragment.querySelector(".source-label").textContent = sourceName(item.sourceType);
+      fragment.querySelector(".status-badge").textContent = inboxStatusName(item.status);
+      fragment.querySelector(".source-title").textContent = inboxDisplayTitle(item);
+      fragment.querySelector(".source-note").textContent = item.personalNote || "No note yet.";
+
+      const sourceLink = fragment.querySelector(".source-link");
+      sourceLink.href = item.sourceUrl || "#";
+      sourceLink.hidden = !item.sourceUrl;
+      fragment.querySelector(".media-filename").textContent = item.mediaFilename || "";
+
+      setInboxProgress(
+        item,
+        fragment.querySelector(".processing-detail"),
+        fragment.querySelector(".processing-label"),
+        fragment.querySelector(".progress-bar")
+      );
+
+      if (item.errorMessage) {
+        const error = fragment.querySelector(".item-error");
+        error.hidden = false;
+        error.textContent = item.errorMessage;
+      }
+
+      uploadAction.hidden = active;
+      mediaInput.disabled = active;
+      if (item.mediaFilename) uploadLabel.textContent = "Replace media";
+
+      if (["WAITING_MEDIA", "MEDIA_ACQUISITION_FAILED", "FAILED", "TRANSCRIPTION_FAILED", "LESSON_FAILED"].includes(item.status)) {
+        autoAction.hidden = false;
+        autoAction.textContent = item.status === "WAITING_MEDIA" ? "Analyze URL automatically" : "Retry automatic analysis";
+      }
+      if (["READY_TO_PROCESS", "FAILED"].includes(item.status)) processAction.hidden = false;
+      if (["MEDIA_READY", "TRANSCRIPTION_FAILED"].includes(item.status)) transcribeAction.hidden = false;
+      if (["TRANSCRIPT_READY", "LESSON_FAILED"].includes(item.status)) generateAction.hidden = false;
+      if (item.lessonId && item.status === "LESSON_READY") openAction.hidden = false;
+
+      mediaInput.addEventListener("change", async () => {
+        const file = mediaInput.files?.[0];
+        if (!file) return;
+        mediaInput.disabled = true;
+        uploadLabel.textContent = "Uploading…";
+        try {
+          await uploadMedia(item.id, file);
+          await refreshInbox();
+        } catch (error) {
+          window.alert(error.message);
+          await refreshInbox();
+        }
+      });
+
+      const runAction = (button, label, action) => {
+        button.addEventListener("click", async () => {
+          button.disabled = true;
+          button.textContent = label;
+          try {
+            await action(item.id);
+          } catch (error) {
+            window.alert(error.message);
+          }
+          await refreshInbox();
+        });
+      };
+      runAction(autoAction, "Starting…", startAutomaticAnalysis);
+      runAction(processAction, "Starting…", processMedia);
+      runAction(transcribeAction, "Starting…", transcribeMedia);
+      runAction(generateAction, "Starting…", generateLesson);
+
+      openAction.addEventListener("click", () => {
+        if (item.lessonId) void openLesson(item.lessonId, "inbox");
+      });
+      deleteAction.disabled = active;
+      deleteAction.addEventListener("click", async () => {
+        if (!window.confirm(`Delete "${inboxDisplayTitle(item)}" and all linked data?`)) return;
+        deleteAction.disabled = true;
+        try {
+          await deleteInbox(item.id);
+          await refreshInbox();
+        } catch (error) {
+          window.alert(error.message);
+          deleteAction.disabled = false;
+        }
+      });
+
+      inboxList.append(fragment);
+    }
+  } catch (error) {
+    inboxList.innerHTML = `
+      <div class="empty-card">
+        <h3>Inbox could not be loaded</h3>
+        <p>${escapeHtml(error.message)}</p>
+      </div>
+    `;
+  }
 }
 
 function excerptText(value, maxLength = 200) {
@@ -1721,6 +1994,16 @@ for (const link of navLinks) {
   link.addEventListener("click", () => void showPage(link.dataset.page));
 }
 
+for (const filter of statusFilters) {
+  filter.addEventListener("click", async () => {
+    currentStatusFilter = filter.dataset.statusFilter || "all";
+    statusFilters.forEach((item) => {
+      item.classList.toggle("is-active", item === filter);
+    });
+    await refreshInbox();
+  });
+}
+
 document.querySelector("[data-open-settings]")?.addEventListener("click", () => {
   setSettingsTagError("");
   syncNoteFeatureVisibility();
@@ -2178,7 +2461,7 @@ captureForm.addEventListener("submit", async (event) => {
   try {
     await createInbox(payload);
     dialog.close();
-    showPage("library");
+    await showPage("inbox");
   } catch (error) {
     captureError.textContent = error.message;
     captureError.hidden = false;

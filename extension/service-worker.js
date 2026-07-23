@@ -46,6 +46,21 @@ async function handleMessage(message = {}) {
       return { ok: true, data };
     }
 
+    case "GET_SAVE_AVAILABILITY": {
+      const settings = await getSettings();
+      const activeItem = await apiRequest(
+        settings.apiBaseUrl,
+        "/api/inbox/active-automatic-pipeline",
+      );
+      return {
+        ok: true,
+        data: {
+          available: !activeItem,
+          activeItem,
+        },
+      };
+    }
+
     case "SAVE_CAPTURE": {
       const capture = validateCapture(message.capture);
       const settings = await getSettings();

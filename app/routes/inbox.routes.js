@@ -2,8 +2,13 @@ import { Router } from "express";
 import multer from "multer";
 
 import { config } from "../config.js";
-import { startAutomaticPipeline } from "../services/automation.service.js";
 import {
+  assertAutomaticPipelineAvailable,
+  getActiveAutomaticPipeline,
+  startAutomaticPipeline
+} from "../services/automation.service.js";
+import {
+  assertInboxSourceAvailable,
   createInboxItem,
   deleteInboxItem,
   getInboxItem,
@@ -61,13 +66,27 @@ export function createInboxRouter() {
     });
   });
 
+  router.get("/active-automatic-pipeline", (_req, res) => {
+    res.json({
+      data: getActiveAutomaticPipeline(),
+      error: null
+    });
+  });
+
   router.post("/", (req, res, next) => {
     try {
-      const item = createInboxItem(req.body);
+      assertInboxSourceAvailable(req.body?.source);
+
       const shouldAutoProcess =
         config.autoProcessUrls &&
         req.body?.autoProcess !== false &&
-        Boolean(item.sourceUrl);
+        Boolean(req.body?.source?.url);
+
+      if (shouldAutoProcess) {
+        assertAutomaticPipelineAvailable();
+      }
+
+      const item = createInboxItem(req.body);
 
       const automatic = shouldAutoProcess
         ? startAutomaticPipeline(item.id)
